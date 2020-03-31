@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.8)
 project(implugingui)
-find_package(PkgConfig REQUIRED)
-pkg_search_module(GLFW REQUIRED glfw3)
+
+#find_package(PkgConfig REQUIRED)
+#pkg_search_module(GLFW REQUIRED glfw3)
+find_package(glfw3 REQUIRED)
+find_package(OpenGL REQUIRED)
 
 set(SOURCE_FILES src/main.cpp
                  src/editor.cpp)
@@ -18,11 +21,11 @@ add_executable(implugingui "${SOURCE_FILES}" ${IMGUI_FILES})
 
 target_compile_features(implugingui PRIVATE cxx_std_17)
 target_compile_definitions(implugingui PRIVATE DIMGUI_IMPL_OPENGL_LOADER_GLAD=1)
-target_compile_options(implugingui PRIVATE -Wall -Wextra -Wno-psabi -ffast-math)
+#target_compile_options(implugingui PRIVATE -Wall -Wextra -Wno-psabi -ffast-math)
 
 target_include_directories(implugingui PRIVATE imgui)
 target_include_directories(implugingui PRIVATE imgui/examples)
 target_include_directories(implugingui PRIVATE imgui/examples/libs/gl3w)
 target_include_directories(implugingui PRIVATE src)
 
-target_link_libraries(implugingui GL GLEW ${GLFW_LIBRARIES} dl)
+target_link_libraries(implugingui glfw  ${OPENGL_LIBRARIES})

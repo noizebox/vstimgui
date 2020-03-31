@@ -68,7 +68,7 @@ private:
     GLFWwindow*      window;
     float            _slider_values[10];
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-    ImVec2 slider_s{20, 100};
+    ImVec2 slider_s{20, 105};
 
 };
 

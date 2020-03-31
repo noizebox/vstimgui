@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "editor.h"
 
 constexpr int WINDOW_WIDTH = 800;
@@ -56,25 +58,74 @@ void Editor::run()
         ImGui::SetNextWindowPos(ImVec2(0,0));
         ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, WINDOW_HEIGHT));
         ImGui::SetNextWindowBgAlpha(0.0f);
-        ImGui::Begin("", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+        ImGui::Begin("__", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
         //ImGui::BeginGroup();
-        ImGui::Text("Filter ADSR");               // Display some text (you can use a format strings too)
+        ImU32 colour = ImColor(0x41, 0x7c, 0x8c, 0xff);
+        ImU32 colour2 = ImColor(0x61, 0x5c, 0x9c, 0xff);
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        draw_list->AddRectFilled(ImVec2(5, 5), ImVec2(180, 155), colour,3.0f, ImDrawCornerFlags_All);
+        draw_list->AddRectFilled(ImVec2(5, 160), ImVec2(180, 315), colour2,3.0f, ImDrawCornerFlags_All);
 
-        ImGui::VSliderFloat("Attack", slider_s, &_slider_values[0], 0, 1, 0);
-        ImGui::SameLine(30,10);
-        ImGui::VSliderFloat("Decay", slider_s, &_slider_values[1], 0, 1, 0);
-        ImGui::SameLine(60,10);
-        ImGui::VSliderFloat("Sustain", slider_s, &_slider_values[2], 0, 1, 0);
+
+        ImGui::Text("Filter ADSR");               // Display some text (you can use a format strings too)
+        ImGui::NewLine();
+        ImGui::SameLine(10, 10);
+
+        ImGui::VSliderFloat("##1", slider_s, &_slider_values[0], 0, 10, 0);
+            //std::cout << "Attack: " << _slider_values[0] << std::endl;
+        ImGui::SameLine(50,10);
+        ImGui::VSliderFloat("##2", slider_s, &_slider_values[1], 0, 10, 0);
+        if (ImGui::IsItemActive())
+              std::cout << "Decay: " << _slider_values[1] << std::endl;
         ImGui::SameLine(90,10);
-        ImGui::VSliderFloat("Release", slider_s, &_slider_values[3], 0, 1, 0);
+        ImGui::VSliderFloat("##4", slider_s, &_slider_values[2], 0, 10, 0);
+        ImGui::SameLine(130,10);
+        ImGui::VSliderFloat("##5", slider_s, &_slider_values[3], 0, 10, 0);
         //ImGui::EndGroup();
+        ImGui::NewLine();
+        ImGui::SameLine(10, 10);
+        ImGui::TextUnformatted("Atk");
+        ImGui::SameLine(60);
+        ImGui::TextUnformatted("Dec");
+        ImGui::SameLine(100);
+        ImGui::TextUnformatted("Sus");
+        ImGui::SameLine(140);
+        ImGui::TextUnformatted("Rel");
+        
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5.0f);
+        ImGui::Text("Amp ADSR");               // Display some text (you can use a format strings too)
+        
+        ImGui::NewLine();
+        ImGui::SameLine(10, 10);
+
+        ImGui::VSliderFloat("##4", slider_s, &_slider_values[4], 0, 10, 0);
+        //std::cout << "Attack: " << _slider_values[0] << std::endl;
+        ImGui::SameLine(50, 10);
+        ImGui::VSliderFloat("##5", slider_s, &_slider_values[5], 0, 10, 0);
+        if (ImGui::IsItemActive())
+            std::cout << "Decay2: " << _slider_values[5] << std::endl;
+        ImGui::SameLine(90, 10);
+        ImGui::VSliderFloat("##6", slider_s, &_slider_values[6], 0, 10, 0);
+        ImGui::SameLine(130, 10);
+        ImGui::VSliderFloat("##7", slider_s, &_slider_values[7], 0, 10, 0);
+        //ImGui::EndGroup();
+        ImGui::NewLine();
+        ImGui::SameLine(10, 10);
+        ImGui::TextUnformatted("Atk");
+        ImGui::SameLine(60);
+        ImGui::TextUnformatted("Dec");
+        ImGui::SameLine(100);
+        ImGui::TextUnformatted("Sus");
+        ImGui::SameLine(140);
+        ImGui::TextUnformatted("Rel");
+
 
         ImGuiDir dir = 0;
         //ImGui::BeginGroup();
 
-        ImGui::ArrowButton("Up", dir);
+        //ImGui::ArrowButton("Up", dir);
 
-        //ImGui::End();
+        ImGui::End();
         //}
 
         // Rendering
@@ -169,8 +220,13 @@ bool Editor::_setup_imgui()
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
     // Setup Dear ImGui style
-    //ImGui::StyleColorsDark();
-    ImGui::StyleColorsClassic();
+    ImGui::StyleColorsDark();
+    //ImGui::StyleColorsClassic();
+
+    auto& style = ImGui::GetStyle();
+    style.GrabRounding = 15.0f;
+    style.FrameRounding = 3.0f;
+    //style.ScaleAllSizes(2.0f);
 
     // Setup Platform/Renderer bindings
     ImGui_ImplGlfw_InitForOpenGL(window, true);

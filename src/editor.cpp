@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include "editor.h"
+#include "custom_widgets.h"
 
 constexpr int WINDOW_WIDTH = 800;
 constexpr int WINDOW_HEIGHT = 400;
@@ -78,9 +79,9 @@ void Editor::run()
         if (ImGui::IsItemActive())
               std::cout << "Decay: " << _slider_values[1] << std::endl;
         ImGui::SameLine(90,10);
-        ImGui::VSliderFloat("##4", slider_s, &_slider_values[2], 0, 10, 0);
+        ImGui::VSliderFloat("##3", slider_s, &_slider_values[2], 0, 10, 0);
         ImGui::SameLine(130,10);
-        ImGui::VSliderFloat("##5", slider_s, &_slider_values[3], 0, 10, 0);
+        ImGui::VSliderFloat("##4", slider_s, &_slider_values[3], 0, 10, 0);
         //ImGui::EndGroup();
         ImGui::NewLine();
         ImGui::SameLine(10, 10);
@@ -98,16 +99,16 @@ void Editor::run()
         ImGui::NewLine();
         ImGui::SameLine(10, 10);
 
-        ImGui::VSliderFloat("##4", slider_s, &_slider_values[4], 0, 10, 0);
+        ImGui::VSliderFloatExt("##5", slider_s, &_slider_values[4], 0, 10, 0);
         //std::cout << "Attack: " << _slider_values[0] << std::endl;
         ImGui::SameLine(50, 10);
-        ImGui::VSliderFloat("##5", slider_s, &_slider_values[5], 0, 10, 0);
+        ImGui::VSliderFloatExt("##6", slider_s, &_slider_values[5], 0, 10, 0);
         if (ImGui::IsItemActive())
             std::cout << "Decay2: " << _slider_values[5] << std::endl;
         ImGui::SameLine(90, 10);
-        ImGui::VSliderFloat("##6", slider_s, &_slider_values[6], 0, 10, 0);
+        ImGui::VSliderFloatExt("##7", slider_s, &_slider_values[6], 0, 10, 0);
         ImGui::SameLine(130, 10);
-        ImGui::VSliderFloat("##7", slider_s, &_slider_values[7], 0, 10, 0);
+        ImGui::VSliderFloatExt("##8", slider_s, &_slider_values[7], 0, 10, 0);
         //ImGui::EndGroup();
         ImGui::NewLine();
         ImGui::SameLine(10, 10);
@@ -224,8 +225,11 @@ bool Editor::_setup_imgui()
     //ImGui::StyleColorsClassic();
 
     auto& style = ImGui::GetStyle();
-    style.GrabRounding = 15.0f;
-    style.FrameRounding = 3.0f;
+    style.GrabRounding = 0.0f;
+    style.FrameRounding = 0.0f;
+    style.Colors[ImGuiCol_FrameBgHovered] = style.Colors[ImGuiCol_FrameBg];
+    style.Colors[ImGuiCol_FrameBgActive] = style.Colors[ImGuiCol_FrameBg];
+    style.Colors[ImGuiCol_SliderGrabActive] = style.Colors[ImGuiCol_SliderGrab];
     //style.ScaleAllSizes(2.0f);
 
     // Setup Platform/Renderer bindings
@@ -240,8 +244,8 @@ bool Editor::_setup_imgui()
     //    // - Read 'docs/FONTS.txt' for more instructions and ils.
     // - Remember that in C/C++ if you want to include a backslash \ in a string literal you need to write a double backslash \\ !
     //io.Fonts->AddFontDefault();
-    //io.Fonts->AddFontFromFileTTF("../imgui/misc/fonts/Roboto-Medium.ttf", 16.0f);
-    io.Fonts->AddFontFromFileTTF("c:/Users/Gustav/Programmering/dear-imgui-test-project/imgui/misc/fonts/Roboto-Medium.ttf", 16.0f);
+    io.Fonts->AddFontFromFileTTF("../imgui/misc/fonts/Roboto-Medium.ttf", 16.0f);
+    //io.Fonts->AddFontFromFileTTF("c:/Users/Gustav/Programmering/dear-imgui-test-project/imgui/misc/fonts/Roboto-Medium.ttf", 16.0f);
     //io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f);
     //io.Fonts->AddFontFromFileTTF("../imgui/misc/fonts/DroidSans.ttf", 16.0f);
     //io.Fonts->AddFontFromFileTTF("c:\users\Gustav\programmering\dear-imgui-test-project\ingui\misc\fonts\DroidSans.ttf", 16.0f);

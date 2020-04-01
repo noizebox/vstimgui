@@ -7,7 +7,8 @@ find_package(glfw3 REQUIRED)
 find_package(OpenGL REQUIRED)
 
 set(SOURCE_FILES src/main.cpp
-                 src/editor.cpp)
+                 src/editor.cpp
+                 src/custom_widgets.cpp)
 
 set(IMGUI_FILES imgui/imgui.cpp
                 imgui/imgui_draw.cpp
@@ -28,4 +29,5 @@ target_include_directories(implugingui PRIVATE imgui/examples)
 target_include_directories(implugingui PRIVATE imgui/examples/libs/gl3w)
 target_include_directories(implugingui PRIVATE src)
 
-target_link_libraries(implugingui glfw  ${OPENGL_LIBRARIES})
+#target_link_libraries(implugingui glfw  ${OPENGL_LIBRARIES})
+target_link_libraries(implugingui glfw GLEW ${OPENGL_LIBRARIES} dl)

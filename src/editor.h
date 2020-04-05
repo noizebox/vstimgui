@@ -5,9 +5,14 @@
 #include <thread>
 #include <cstdio>
 
+#include "aeffeditor.h"
+#include "imgui_editor/imgui_editor.h"
+
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+
+namespace imgui_editor {
 
 // About Desktop OpenGL function loaders:
 //  Modern desktop OpenGL doesn't have a standard portable header file to load OpenGL function pointers.
@@ -16,6 +21,7 @@
 #if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)
 #include <GL/gl3w.h>            // Initialize with gl3wInit()
 #elif defined(IMGUI_IMPL_OPENGL_LOADER_GLEW)
+
 #include <GL/glew.h>            // Initialize with glewInit()
 #elif defined(IMGUI_IMPL_OPENGL_LOADER_GLAD)
 #include <glad/glad.h>          // Initialize with gladLoadGL()
@@ -43,34 +49,39 @@ using namespace gl;
 #pragma comment(lib, "legacy_stdio_definitions")
 #endif
 
-static void glfw_error_callback(int error, const char* description)
+static void glfw_error_callback(int error, const char*description)
 {
-    fprintf(stderr, "Glfw Error %d: %s\n", error, description);
+    std::cerr << "Glfw Error " << error << ", " << description << std::endl;
 }
 
-
-class Editor
+class Editor : public AEffEditor
 {
 public:
-    Editor() = default;
+    Editor(AudioEffect* instance, int num_parameters);
 
-    void run();
+    bool getRect(ERect**rect) override;
 
-    void stop();
+    bool open(void* window) override;
+
+    void close() override;
+
+    void idle() override;
 
 private:
-    bool             _setup_open_gl();
-    bool             _setup_imgui();
+    bool _setup_open_gl();
+
+    bool _setup_imgui();
+
+    int _num_parameters;
 
     std::atomic_bool _running{false};
-    std::thread      _update_thread;
+    std::thread _update_thread;
 
-    GLFWwindow*      window;
-    float            _slider_values[10];
+    GLFWwindow*_window;
+    float _slider_values[10];
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
     ImVec2 slider_s{20, 105};
-
 };
 
-
+} // imgui_editor
 #endif //IMPLUGINGUI_EDITOR_H

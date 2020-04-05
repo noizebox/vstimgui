@@ -3,15 +3,26 @@
 #include "editor.h"
 #include "custom_widgets.h"
 
+namespace imgui_editor {
+
 constexpr int WINDOW_WIDTH = 800;
 constexpr int WINDOW_HEIGHT = 400;
-const char* glsl_version = "#version 130";
+const char*glsl_version = "#version 130";
 
-void Editor::run()
+std::unique_ptr<AEffEditor> create_editor(AudioEffect* instance, int num_parameters)
+{
+    return std::make_unique<Editor>(instance, num_parameters);
+}
+
+Editor::Editor(AudioEffect* instance, int num_parameters) : AEffEditor::AEffEditor(instance),
+                                                           _num_parameters(num_parameters)
+{}
+
+bool Editor::open(void* window)
 {
     _setup_open_gl();
     _setup_imgui();
-    while (!glfwWindowShouldClose(window))
+    while (!glfwWindowShouldClose(_window))
     {
         // Poll and handle events (inputs, window resize, etc.)
         // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
@@ -56,16 +67,21 @@ void Editor::run()
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
             ImGui::End();
         } */
-        ImGui::SetNextWindowPos(ImVec2(0,0));
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, WINDOW_HEIGHT));
         ImGui::SetNextWindowBgAlpha(0.0f);
-        ImGui::Begin("__", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+        ImGui::Begin("__", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                    ImGuiWindowFlags_NoMove);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
         //ImGui::BeginGroup();
         ImU32 colour = ImColor(0x41, 0x7c, 0x8c, 0xff);
         ImU32 colour2 = ImColor(0x61, 0x5c, 0x9c, 0xff);
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        draw_list->AddRectFilled(ImVec2(5, 5), ImVec2(180, 155), colour,3.0f, ImDrawCornerFlags_All);
-        draw_list->AddRectFilled(ImVec2(5, 160), ImVec2(180, 315), colour2,3.0f, ImDrawCornerFlags_All);
+        ImU32 colour_bg = ImColor(0x31, 0x5c, 0x6c, 0xff);
+        ImU32 colour2_bg = ImColor(0x41, 0x4c, 0x7c, 0xff);
+        ImDrawList*draw_list = ImGui::GetWindowDrawList();
+        //draw_list->AddRectFilled(ImVec2(8, 8), ImVec2(183, 158), colour_bg,3.0f, ImDrawCornerFlags_All);
+        draw_list->AddRectFilled(ImVec2(5, 5), ImVec2(180, 155), colour, 3.0f, ImDrawCornerFlags_All);
+        //draw_list->AddRectFilled(ImVec2(8, 163), ImVec2(183, 318), colour2_bg,3.0f, ImDrawCornerFlags_All);
+        draw_list->AddRectFilled(ImVec2(5, 160), ImVec2(180, 315), colour2, 3.0f, ImDrawCornerFlags_All);
 
 
         ImGui::Text("Filter ADSR");               // Display some text (you can use a format strings too)
@@ -73,14 +89,14 @@ void Editor::run()
         ImGui::SameLine(10, 10);
 
         ImGui::VSliderFloat("##1", slider_s, &_slider_values[0], 0, 10, 0);
-            //std::cout << "Attack: " << _slider_values[0] << std::endl;
-        ImGui::SameLine(50,10);
+        //std::cout << "Attack: " << _slider_values[0] << std::endl;
+        ImGui::SameLine(50, 10);
         ImGui::VSliderFloat("##2", slider_s, &_slider_values[1], 0, 10, 0);
         if (ImGui::IsItemActive())
-              std::cout << "Decay: " << _slider_values[1] << std::endl;
-        ImGui::SameLine(90,10);
+            std::cout << "Decay: " << _slider_values[1] << std::endl;
+        ImGui::SameLine(90, 10);
         ImGui::VSliderFloat("##3", slider_s, &_slider_values[2], 0, 10, 0);
-        ImGui::SameLine(130,10);
+        ImGui::SameLine(130, 10);
         ImGui::VSliderFloat("##4", slider_s, &_slider_values[3], 0, 10, 0);
         //ImGui::EndGroup();
         ImGui::NewLine();
@@ -92,10 +108,10 @@ void Editor::run()
         ImGui::TextUnformatted("Sus");
         ImGui::SameLine(140);
         ImGui::TextUnformatted("Rel");
-        
+
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5.0f);
         ImGui::Text("Amp ADSR");               // Display some text (you can use a format strings too)
-        
+
         ImGui::NewLine();
         ImGui::SameLine(10, 10);
 
@@ -120,25 +136,20 @@ void Editor::run()
         ImGui::SameLine(140);
         ImGui::TextUnformatted("Rel");
 
-
         ImGuiDir dir = 0;
-        //ImGui::BeginGroup();
-
-        //ImGui::ArrowButton("Up", dir);
-
         ImGui::End();
         //}
 
         // Rendering
         ImGui::Render();
         int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
+        glfwGetFramebufferSize(_window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
         glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-        glfwSwapBuffers(window);
+        glfwSwapBuffers(_window);
     }
 
     // Cleanup
@@ -146,11 +157,11 @@ void Editor::run()
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
-    glfwDestroyWindow(window);
+    glfwDestroyWindow(_window);
     glfwTerminate();
 }
 
-void Editor::stop()
+void Editor::close()
 {
 
 }
@@ -179,10 +190,10 @@ bool Editor::_setup_open_gl()
 #endif
 
     // Create window with graphics context
-    window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Dear ImGui Plugin UI", NULL, NULL);
-    if (window == NULL)
+    _window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Dear ImGui Plugin UI", NULL, NULL);
+    if (_window == NULL)
         return 1;
-    glfwMakeContextCurrent(window);
+    glfwMakeContextCurrent(_window);
     glfwSwapInterval(1); // Enable vsync
 
     // Initialize OpenGL loader
@@ -216,7 +227,8 @@ bool Editor::_setup_imgui()
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGuiIO& io = ImGui::GetIO();
+    (void) io;
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
@@ -233,7 +245,7 @@ bool Editor::_setup_imgui()
     //style.ScaleAllSizes(2.0f);
 
     // Setup Platform/Renderer bindings
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplGlfw_InitForOpenGL(_window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
     // Load Fonts
@@ -254,3 +266,15 @@ bool Editor::_setup_imgui()
     //IM_ASSERT(font != NULL);
     return true;
 }
+
+bool Editor::getRect(ERect** rect)
+{
+    return false;
+}
+
+void Editor::idle()
+{
+
+}
+
+} // imgui_editor

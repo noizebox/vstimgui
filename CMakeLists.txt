@@ -40,11 +40,11 @@ else()
 endif()
 
 #target_link_libraries(implugingui glfw  ${OPENGL_LIBRARIES})
-target_link_libraries(implugingui glfw GLEW ${OPENGL_LIBRARIES} dl)
+target_link_libraries(implugingui glfw GLEW ${OPENGL_LIBRARIES} dl pthread)
 
 if (BUILD_STANDALONE)
     add_executable(standalone_demo src/standalone_demo.cpp)
-    target_link_libraries(standalone_demo implugingui)
+    target_link_libraries(standalone_demo implugingui X11)
 
 endif()
 

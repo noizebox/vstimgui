@@ -41,6 +41,8 @@ using namespace gl;
 
 // Include glfw3.h after our OpenGL definitions
 #include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_X11
+#include <GLFW/glfw3native.h>
 
 // [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
 // To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
@@ -68,15 +70,19 @@ public:
     void idle() override;
 
 private:
-    bool _setup_open_gl();
+    bool _setup_open_gl(void* host_window);
 
     bool _setup_imgui();
 
     int _num_parameters;
 
+    void _draw_loop(void* window);
+
     std::atomic_bool _running{false};
     std::thread _update_thread;
+    ERect _rect;
 
+    Window _host_window;
     GLFWwindow*_window;
     float _slider_values[10];
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);

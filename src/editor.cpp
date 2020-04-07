@@ -7,7 +7,7 @@ namespace imgui_editor {
 
 constexpr int WINDOW_WIDTH = 800;
 constexpr int WINDOW_HEIGHT = 400;
-const char*glsl_version = "#version 130";
+const char* glsl_version = "#version 130";
 
 std::unique_ptr<AEffEditor> create_editor(AudioEffect* instance, int num_parameters)
 {
@@ -15,14 +15,197 @@ std::unique_ptr<AEffEditor> create_editor(AudioEffect* instance, int num_paramet
 }
 
 Editor::Editor(AudioEffect* instance, int num_parameters) : AEffEditor::AEffEditor(instance),
-                                                           _num_parameters(num_parameters)
+                                                           _num_parameters(num_parameters),
+                                                           _rect{0, 0, WINDOW_HEIGHT, WINDOW_WIDTH}
 {}
 
 bool Editor::open(void* window)
 {
-    _setup_open_gl();
+    _running = true;
+    _update_thread = std::thread(&Editor::_draw_loop, this, window);
+
+}
+
+void Editor::close()
+{
+    _running = false;
+    std::cout << "Close called" << std::endl;
+    if (_update_thread.joinable())
+    {
+        _update_thread.join();
+    }
+}
+
+bool Editor::_setup_open_gl(void* host_window)
+{
+    glfwSetErrorCallback(glfw_error_callback);
+    if (!glfwInit())
+        return false;
+
+    // Until this feature is done in glfw https://github.com/glfw/glfw/issues/25
+    // Open a glfw window and set it's native window a child of the host provided window
+
+    // Decide GL+GLSL versions
+#if __APPLE__
+    // GL 3.2 + GLSL 150
+    const char* glsl_version = "#version 150";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // Required on Mac
+#else
+    // GL 3.0 + GLSL 130
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    /* Disable the status bar */
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+    //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+    //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
+#endif
+
+    // Create window with graphics context
+    _window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Dear ImGui Plugin UI", nullptr, nullptr);
+    if (_window == nullptr)
+    {
+        return false;
+    }
+
+//#ifdef LINUX
+    Window root, parent, *ch;
+    unsigned int nch;
+    XID host_win = *reinterpret_cast<Window*>(host_window);
+    _host_window = host_win;
+
+    auto display = glfwGetX11Display();
+    auto x11_win = glfwGetX11Window(_window);
+
+    XQueryTree(display,x11_win , &root, &parent, &ch, &nch);
+    std::cout << "Parent; " << parent << ", root: " << root << " n ch: " << nch << std::endl;
+
+    int res = 0;
+    //XReparentWindow(display, parent, *reinterpret_cast<Window*>(host_window), 0, 0);
+    XReparentWindow(display, x11_win, *reinterpret_cast<Window*>(host_window), 0, 0);
+    //XDestroyWindow(display, parent);
+    XSetInputFocus(display, x11_win, RevertToParent, 0);
+    //XFlush(display);
+    //XMapWindow(display, x11_win);
+    //XMapWindow(display, host_win);
+    //XSelectInput(display, x11_win, ButtonPress);
+
+    XQueryTree(display,x11_win , &root, &parent, &ch, &nch);
+    std::cout << "Parent; " << parent << ", root: " << root << ", res: " << res << std::endl;
+
+   /* for (int i= 0; i <100 ; ++i)
+    {
+        Window root, parent, *ch;
+        unsigned int nch;
+        auto display = glfwGetX11Display();
+        auto x11_win = glfwGetX11Window(_window);
+
+        XQueryTree(display,*reinterpret_cast<Window*>(host_window) , &root, &parent, &ch, &nch);
+        if(parent!=*reinterpret_cast<Window*>(host_window)) {
+            XReparentWindow(display, extwin, window, 0, 0);
+        }
+        if(nch>0) { XFree(ch); }
+        XFlush(display);
+        usleep(3e5);
+    }*/
+
+    //XMapWindow(display, reinterpret_cast<Window>(host_window));
+    //glfwShowWindow(_window);
+//#endif
+
+    glfwMakeContextCurrent(_window);
+    glfwSwapInterval(1); // Enable vsync
+
+    // Initialize OpenGL loader
+#if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)
+    bool err = gl3wInit() != 0;
+#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLEW)
+    bool err = glewInit() != GLEW_OK;
+#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLAD)
+    bool err = gladLoadGL() == 0;
+#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLBINDING2)
+    bool err = false;
+    glbinding::Binding::initialize();
+#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLBINDING3)
+    bool err = false;
+    glbinding::initialize([](const char* name) { return (glbinding::ProcAddress)glfwGetProcAddress(name); });
+#else
+    bool err = false; // If you use IMGUI_IMPL_OPENGL_LOADER_CUSTOM, your loader is likely to requires some form of initialization.
+#endif
+    if (err)
+    {
+        fprintf(stderr, "Failed to initialize OpenGL loader!\n");
+        return false;
+    }
+    return true;
+}
+
+bool Editor::_setup_imgui()
+{
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    (void) io;
+    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+    //ImGui::StyleColorsClassic();
+
+    auto& style = ImGui::GetStyle();
+    style.GrabRounding = 0.0f;
+    style.FrameRounding = 0.0f;
+    style.Colors[ImGuiCol_FrameBgHovered] = style.Colors[ImGuiCol_FrameBg];
+    style.Colors[ImGuiCol_FrameBgActive] = style.Colors[ImGuiCol_FrameBg];
+    style.Colors[ImGuiCol_SliderGrabActive] = style.Colors[ImGuiCol_SliderGrab];
+    //style.ScaleAllSizes(2.0f);
+
+    // Setup Platform/Renderer bindings
+    ImGui_ImplGlfw_InitForOpenGL(_window, true);
+    ImGui_ImplOpenGL3_Init(glsl_version);
+
+    // Load Fonts
+    // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple fonts and use ImGui::PushFont()/PopFont() to select them.
+    // - AddFontFrdetaomFileTTF() will return the ImFont* so you can store it if you need to select the font among multiple.
+    //    // - If the file cannot be loaded, the function will return NULL. Please handle those errors in your application (e.g. use an assertion, or display an error and quit).
+    //    // - The fonts will be rasterized at a given size (w/ oversampling) and stored into a texture when calling ImFontAtlas::Build()/GetTexDataAsXXXX(), which ImGui_ImplXXXX_NewFrame below will call.
+    //    // - Read 'docs/FONTS.txt' for more instructions and ils.
+    // - Remember that in C/C++ if you want to include a backslash \ in a string literal you need to write a double backslash \\ !
+    //io.Fonts->AddFontDefault();
+    io.Fonts->AddFontFromFileTTF("../imgui/misc/fonts/Roboto-Medium.ttf", 16.0f);
+    //io.Fonts->AddFontFromFileTTF("c:/Users/Gustav/Programmering/dear-imgui-test-project/imgui/misc/fonts/Roboto-Medium.ttf", 16.0f);
+    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f);
+    //io.Fonts->AddFontFromFileTTF("../imgui/misc/fonts/DroidSans.ttf", 16.0f);
+    //io.Fonts->AddFontFromFileTTF("c:\users\Gustav\programmering\dear-imgui-test-project\ingui\misc\fonts\DroidSans.ttf", 16.0f);
+    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/ProggyTiny.ttf", 10.0f);
+    //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesJapanese());
+    //IM_ASSERT(font != NULL);
+    return true;
+}
+
+bool Editor::getRect(ERect** rect)
+{
+    **rect = _rect;
+    return true;
+}
+
+void Editor::idle()
+{
+
+}
+
+void Editor::_draw_loop(void* window)
+{
+    _setup_open_gl(window);
     _setup_imgui();
-    while (!glfwWindowShouldClose(_window))
+    int count = 0;
+    while (!glfwWindowShouldClose(_window) && _running)
     {
         // Poll and handle events (inputs, window resize, etc.)
         // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
@@ -150,131 +333,20 @@ bool Editor::open(void* window)
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glfwSwapBuffers(_window);
+        if (count++ % 60 == 0)
+        {
+            std::cout << "Ping " << count / 60 << std::endl;
+        }
     }
 
     // Cleanup
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
-
+    std::cout << "Exiting ImGui/OpenGL" << std::endl;
     glfwDestroyWindow(_window);
     glfwTerminate();
-}
-
-void Editor::close()
-{
-
-}
-
-bool Editor::_setup_open_gl()
-{
-    glfwSetErrorCallback(glfw_error_callback);
-    if (!glfwInit())
-        return false;
-
-    // Decide GL+GLSL versions
-#if __APPLE__
-    // GL 3.2 + GLSL 150
-    const char* glsl_version = "#version 150";
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // Required on Mac
-#else
-    // GL 3.0 + GLSL 130
-
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-    //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
-    //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
-#endif
-
-    // Create window with graphics context
-    _window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Dear ImGui Plugin UI", NULL, NULL);
-    if (_window == NULL)
-        return 1;
-    glfwMakeContextCurrent(_window);
-    glfwSwapInterval(1); // Enable vsync
-
-    // Initialize OpenGL loader
-#if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)
-    bool err = gl3wInit() != 0;
-#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLEW)
-    bool err = glewInit() != GLEW_OK;
-#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLAD)
-    bool err = gladLoadGL() == 0;
-#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLBINDING2)
-    bool err = false;
-    glbinding::Binding::initialize();
-#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLBINDING3)
-    bool err = false;
-    glbinding::initialize([](const char* name) { return (glbinding::ProcAddress)glfwGetProcAddress(name); });
-#else
-    bool err = false; // If you use IMGUI_IMPL_OPENGL_LOADER_CUSTOM, your loader is likely to requires some form of initialization.
-#endif
-    if (err)
-    {
-        fprintf(stderr, "Failed to initialize OpenGL loader!\n");
-        return false;
-    }
-    return true;
-
-
-}
-
-bool Editor::_setup_imgui()
-{
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    (void) io;
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-    //ImGui::StyleColorsClassic();
-
-    auto& style = ImGui::GetStyle();
-    style.GrabRounding = 0.0f;
-    style.FrameRounding = 0.0f;
-    style.Colors[ImGuiCol_FrameBgHovered] = style.Colors[ImGuiCol_FrameBg];
-    style.Colors[ImGuiCol_FrameBgActive] = style.Colors[ImGuiCol_FrameBg];
-    style.Colors[ImGuiCol_SliderGrabActive] = style.Colors[ImGuiCol_SliderGrab];
-    //style.ScaleAllSizes(2.0f);
-
-    // Setup Platform/Renderer bindings
-    ImGui_ImplGlfw_InitForOpenGL(_window, true);
-    ImGui_ImplOpenGL3_Init(glsl_version);
-
-    // Load Fonts
-    // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple fonts and use ImGui::PushFont()/PopFont() to select them.
-    // - AddFontFrdetaomFileTTF() will return the ImFont* so you can store it if you need to select the font among multiple.
-    //    // - If the file cannot be loaded, the function will return NULL. Please handle those errors in your application (e.g. use an assertion, or display an error and quit).
-    //    // - The fonts will be rasterized at a given size (w/ oversampling) and stored into a texture when calling ImFontAtlas::Build()/GetTexDataAsXXXX(), which ImGui_ImplXXXX_NewFrame below will call.
-    //    // - Read 'docs/FONTS.txt' for more instructions and ils.
-    // - Remember that in C/C++ if you want to include a backslash \ in a string literal you need to write a double backslash \\ !
-    //io.Fonts->AddFontDefault();
-    io.Fonts->AddFontFromFileTTF("../imgui/misc/fonts/Roboto-Medium.ttf", 16.0f);
-    //io.Fonts->AddFontFromFileTTF("c:/Users/Gustav/Programmering/dear-imgui-test-project/imgui/misc/fonts/Roboto-Medium.ttf", 16.0f);
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f);
-    //io.Fonts->AddFontFromFileTTF("../imgui/misc/fonts/DroidSans.ttf", 16.0f);
-    //io.Fonts->AddFontFromFileTTF("c:\users\Gustav\programmering\dear-imgui-test-project\ingui\misc\fonts\DroidSans.ttf", 16.0f);
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/ProggyTiny.ttf", 10.0f);
-    //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesJapanese());
-    //IM_ASSERT(font != NULL);
-    return true;
-}
-
-bool Editor::getRect(ERect** rect)
-{
-    return false;
-}
-
-void Editor::idle()
-{
-
+    std::cout << "Exiting draw loop" << std::endl;
 }
 
 } // imgui_editor

@@ -1,6 +1,18 @@
 #ifndef IMPLUGINGUI_DUMMY_VST_EDITOR_H
 #define IMPLUGINGUI_DUMMY_VST_EDITOR_H
 
+
+/* This is a stand-in header just for building the demo in case the
+ * Vst2.4 SDK is not available. As the SDK has been deprecated Steinberg,
+ * it is no longer publicly available.
+ * The intention of this header is not in any way to infringe on the
+ * IP of Steinberg and it cannot be used to build a Vst Editor.
+ *
+ * The AudioEffect, ERect and AEffEditor classes defined in this header
+ * only define small subset of the functions of the respective classes
+ * in the Vst2.4 SDK and will not be ABI compatible with the AudioEffect
+ * or AeffEditor classes defined there. */
+
 #include <cassert>
 #include <array>
 #include <string_view>
@@ -62,7 +74,7 @@ struct ERect
 class AEffEditor
 {
 public:
-    AEffEditor (AudioEffect* effect = 0) : _effect(effect) {}
+    AEffEditor (AudioEffect* effect = nullptr) : _effect(effect) {}
 
     virtual ~AEffEditor () = default;
 

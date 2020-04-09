@@ -72,7 +72,7 @@ bool Editor::_setup_open_gl(void* host_window)
         return false;
     }
 
-//#ifdef LINUX
+#ifdef LINUX
     Window root, parent, *ch;
     unsigned int nch;
     XID host_win = *reinterpret_cast<Window*>(host_window);
@@ -97,26 +97,28 @@ bool Editor::_setup_open_gl(void* host_window)
     XQueryTree(display,x11_win , &root, &parent, &ch, &nch);
     std::cout << "Parent; " << parent << ", root: " << root << ", res: " << res << std::endl;
 
-   /* for (int i= 0; i <100 ; ++i)
-    {
-        Window root, parent, *ch;
-        unsigned int nch;
-        auto display = glfwGetX11Display();
-        auto x11_win = glfwGetX11Window(_window);
-
-        XQueryTree(display,*reinterpret_cast<Window*>(host_window) , &root, &parent, &ch, &nch);
-        if(parent!=*reinterpret_cast<Window*>(host_window)) {
-            XReparentWindow(display, extwin, window, 0, 0);
-        }
-        if(nch>0) { XFree(ch); }
-        XFlush(display);
-        usleep(3e5);
-    }*/
-
     //XMapWindow(display, reinterpret_cast<Window>(host_window));
     //glfwShowWindow(_window);
-//#endif
-
+#endif
+#ifdef WINDOWS
+    HWND hWnd = glfwGetWin32Window(_window);
+    //SetWindowLongPtr(hWnd, GWL_STYLE, WS_POPUP | WS_CHILD);
+    auto parent = GetParent(hWnd);
+    std::cout << "glfw win: " << (LONG64)hWnd << " , parent: " << (LONG64)parent << ", host win: "
+        << (LONG64)host_window << std::endl;
+    //SetWindowLongPtr(hWnd, GWL_STYLE, (GetWindowLongPtr(hWnd, GWL_STYLE) & ~WS_POPUP) | WS_CHILD);
+   if (SetParent(hWnd, *reinterpret_cast<HWND*>(host_window)))
+    {
+        //systemWindow = host_window;
+        std::cout << "Successfully set parent host_window" << std::endl;
+    }
+    else
+    {
+        std::cout << GetLastError() << std::endl;
+    }
+    //SetWindowPos(hWnd, HWND_TOP , 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, SWP_SHOWWINDOW);
+ 
+#endif
     glfwMakeContextCurrent(_window);
     glfwSwapInterval(1); // Enable vsync
 

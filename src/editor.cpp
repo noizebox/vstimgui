@@ -1,12 +1,18 @@
 #include <iostream>
+#include <chrono>
 
 #include "editor.h"
 #include "custom_widgets.h"
+
+#ifdef LINUX
+#include <X11/Xlib.h>
+#endif
 
 namespace imgui_editor {
 
 constexpr int WINDOW_WIDTH = 800;
 constexpr int WINDOW_HEIGHT = 400;
+constexpr float SMOOTH_FACT = 0.05;
 const char* glsl_version = "#version 130";
 
 std::unique_ptr<AEffEditor> create_editor(AudioEffect* instance, int num_parameters)
@@ -23,13 +29,12 @@ bool Editor::open(void* window)
 {
     _running = true;
     _update_thread = std::thread(&Editor::_draw_loop, this, window);
-
+    return true;
 }
 
 void Editor::close()
 {
     _running = false;
-    std::cout << "Close called" << std::endl;
     if (_update_thread.joinable())
     {
         _update_thread.join();
@@ -40,10 +45,11 @@ bool Editor::_setup_open_gl(void* host_window)
 {
     glfwSetErrorCallback(glfw_error_callback);
     if (!glfwInit())
+    {
         return false;
-
-    // Until this feature is done in glfw https://github.com/glfw/glfw/issues/25
-    // Open a glfw window and set it's native window a child of the host provided window
+    }
+    /* Until this feature is done in glfw https://github.com/glfw/glfw/issues/25
+     * Open a glfw window and set it's native window a child of the host provided window */
 
     // Decide GL+GLSL versions
 #if __APPLE__
@@ -55,62 +61,57 @@ bool Editor::_setup_open_gl(void* host_window)
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // Required on Mac
 #else
     // GL 3.0 + GLSL 130
-
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    /* Disable the status bar */
+#endif
+#ifdef WINDOWS
+    /* On Linux we can't, for some reason, not reparent an undecorated window */
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-    //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
-    //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
 #endif
 
-    // Create window with graphics context
     _window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Dear ImGui Plugin UI", nullptr, nullptr);
     if (_window == nullptr)
     {
+        std::cout << "Failed to create window"  << std::endl;
         return false;
     }
 
 #ifdef LINUX
-    Window root, parent, *ch;
+    Window root;
+    Window parent;
+    Window *child_list;
     unsigned int nch;
     XID host_win = *reinterpret_cast<Window*>(host_window);
     _host_window = host_win;
-
     auto display = glfwGetX11Display();
     auto x11_win = glfwGetX11Window(_window);
 
-    XQueryTree(display,x11_win , &root, &parent, &ch, &nch);
-    std::cout << "Parent; " << parent << ", root: " << root << " n ch: " << nch << std::endl;
-
-    int res = 0;
-    //XReparentWindow(display, parent, *reinterpret_cast<Window*>(host_window), 0, 0);
-    XReparentWindow(display, x11_win, *reinterpret_cast<Window*>(host_window), 0, 0);
-    //XDestroyWindow(display, parent);
-    XSetInputFocus(display, x11_win, RevertToParent, 0);
-    //XFlush(display);
-    //XMapWindow(display, x11_win);
-    //XMapWindow(display, host_win);
-    //XSelectInput(display, x11_win, ButtonPress);
-
-    XQueryTree(display,x11_win , &root, &parent, &ch, &nch);
-    std::cout << "Parent; " << parent << ", root: " << root << ", res: " << res << std::endl;
-
-    //XMapWindow(display, reinterpret_cast<Window>(host_window));
-    //glfwShowWindow(_window);
+    /* The X11 window handle that we get from glfwGetX11Window() is in fact
+     * wrapped in a container window and we can't reparent that directly.
+     * We must get the parent of the given X11 window and reparent that to
+     * the window provide by the host.
+     * We also need to get the size of the parent window so we can get the
+     * size of the title bar to move the window up in order to hide it
+     * */
+    XQueryTree(display,x11_win , &root, &parent, &child_list, &nch);
+    XWindowAttributes attributes;
+    int h_offset = 0;
+    if (XGetWindowAttributes(display, parent, &attributes))
+    {
+        h_offset = _rect.bottom - attributes.height;
+    }
+    XReparentWindow(display, parent, _host_window, 0, h_offset);
 #endif
+
 #ifdef WINDOWS
     HWND hWnd = glfwGetWin32Window(_window);
     //SetWindowLongPtr(hWnd, GWL_STYLE, WS_POPUP | WS_CHILD);
     auto parent = GetParent(hWnd);
-    std::cout << "glfw win: " << (LONG64)hWnd << " , parent: " << (LONG64)parent << ", host win: "
-        << (LONG64)host_window << std::endl;
     //SetWindowLongPtr(hWnd, GWL_STYLE, (GetWindowLongPtr(hWnd, GWL_STYLE) & ~WS_POPUP) | WS_CHILD);
-   if (SetParent(hWnd, *reinterpret_cast<HWND*>(host_window)))
+    if (SetParent(hWnd, *reinterpret_cast<HWND*>(host_window)))
     {
-        //systemWindow = host_window;
-        std::cout << "Successfully set parent host_window" << std::endl;
+        _host_window = host_window;
     }
     else
     {
@@ -120,7 +121,7 @@ bool Editor::_setup_open_gl(void* host_window)
  
 #endif
     glfwMakeContextCurrent(_window);
-    glfwSwapInterval(1); // Enable vsync
+    glfwSwapInterval(1);
 
     // Initialize OpenGL loader
 #if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)
@@ -140,7 +141,7 @@ bool Editor::_setup_open_gl(void* host_window)
 #endif
     if (err)
     {
-        fprintf(stderr, "Failed to initialize OpenGL loader!\n");
+        std::cout << "Failed to initialize OpenGL loader!" << std::endl;
         return false;
     }
     return true;
@@ -153,8 +154,6 @@ bool Editor::_setup_imgui()
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     (void) io;
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
@@ -166,7 +165,6 @@ bool Editor::_setup_imgui()
     style.Colors[ImGuiCol_FrameBgHovered] = style.Colors[ImGuiCol_FrameBg];
     style.Colors[ImGuiCol_FrameBgActive] = style.Colors[ImGuiCol_FrameBg];
     style.Colors[ImGuiCol_SliderGrabActive] = style.Colors[ImGuiCol_SliderGrab];
-    //style.ScaleAllSizes(2.0f);
 
     // Setup Platform/Renderer bindings
     ImGui_ImplGlfw_InitForOpenGL(_window, true);
@@ -198,15 +196,18 @@ bool Editor::getRect(ERect** rect)
 }
 
 void Editor::idle()
-{
-
-}
+{}
 
 void Editor::_draw_loop(void* window)
 {
     _setup_open_gl(window);
     _setup_imgui();
     int count = 0;
+
+    float draw_time = 0;
+    float render_time = 0;
+    float gl_render_time = 0;
+    float swap_time = 0;
     while (!glfwWindowShouldClose(_window) && _running)
     {
         // Poll and handle events (inputs, window resize, etc.)
@@ -215,48 +216,18 @@ void Editor::_draw_loop(void* window)
         // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application.
         // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
         glfwPollEvents();
-        //glfwWaitEvents();
 
+        auto start_time = std::chrono::high_resolution_clock::now();
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        bool show_demo_window = false;
-        bool show_another_window = true;
-
-        /*
-        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        //if (show_demo_window)
-        //    ImGui::ShowDemoWindow(&show_demo_window);
-
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to created a named window.
-        {
-            static float f = 0.0f;
-            static int counter = 0;
-
-            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-
-            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-            ImGui::Checkbox("Another Window", &show_another_window);
-
-            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
-            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
-            ImGui::SameLine();
-            ImGui::Text("counter = %d", counter);
-
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-            ImGui::End();
-        } */
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, WINDOW_HEIGHT));
         ImGui::SetNextWindowBgAlpha(0.0f);
         ImGui::Begin("__", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                                    ImGuiWindowFlags_NoMove);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+                                    ImGuiWindowFlags_NoMove);
         //ImGui::BeginGroup();
         ImU32 colour = ImColor(0x41, 0x7c, 0x8c, 0xff);
         ImU32 colour2 = ImColor(0x61, 0x5c, 0x9c, 0xff);
@@ -278,7 +249,9 @@ void Editor::_draw_loop(void* window)
         ImGui::SameLine(50, 10);
         ImGui::VSliderFloat("##2", slider_s, &_slider_values[1], 0, 10, 0);
         if (ImGui::IsItemActive())
+        {
             std::cout << "Decay: " << _slider_values[1] << std::endl;
+        }
         ImGui::SameLine(90, 10);
         ImGui::VSliderFloat("##3", slider_s, &_slider_values[2], 0, 10, 0);
         ImGui::SameLine(130, 10);
@@ -305,7 +278,9 @@ void Editor::_draw_loop(void* window)
         ImGui::SameLine(50, 10);
         ImGui::VSliderFloatExt("##6", slider_s, &_slider_values[5], 0, 10, 0);
         if (ImGui::IsItemActive())
+        {
             std::cout << "Decay2: " << _slider_values[5] << std::endl;
+        }
         ImGui::SameLine(90, 10);
         ImGui::VSliderFloatExt("##7", slider_s, &_slider_values[6], 0, 10, 0);
         ImGui::SameLine(130, 10);
@@ -321,34 +296,46 @@ void Editor::_draw_loop(void* window)
         ImGui::SameLine(140);
         ImGui::TextUnformatted("Rel");
 
-        ImGuiDir dir = 0;
+        ImGui::Text("Draw time: %f ms", draw_time);
+        ImGui::Text("Render time: %f ms", render_time);
+        ImGui::Text("Open GL render time: %f ms", gl_render_time);
+        ImGui::Text("Swap time: %f ms", swap_time);
         ImGui::End();
         //}
+        auto split_time = std::chrono::high_resolution_clock::now();
 
         // Rendering
         ImGui::Render();
         int display_w, display_h;
+        auto split2_time = std::chrono::high_resolution_clock::now();
+
         glfwGetFramebufferSize(_window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
         glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
+        auto split3_time = std::chrono::high_resolution_clock::now();
         glfwSwapBuffers(_window);
+        auto end_time = std::chrono::high_resolution_clock::now();
         if (count++ % 60 == 0)
         {
             std::cout << "Ping " << count / 60 << std::endl;
         }
+
+        /* Filter the timings so they look a bit nicer */
+        draw_time = (1.0f - SMOOTH_FACT) * draw_time + SMOOTH_FACT * (split_time - start_time).count() / 1'000'000.0f;
+        render_time = (1.0f - SMOOTH_FACT) * render_time + SMOOTH_FACT * (split2_time - split_time).count() / 1'000'000.0f;
+        gl_render_time = (1.0f - SMOOTH_FACT) * gl_render_time + SMOOTH_FACT * (split3_time - split2_time).count() / 1'000'000.0f;
+        swap_time = (1.0f - SMOOTH_FACT) * swap_time + SMOOTH_FACT * (end_time - split3_time).count() / 1'000'000.0f;
     }
 
-    // Cleanup
+    /* Cleanup on exit */
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
-    std::cout << "Exiting ImGui/OpenGL" << std::endl;
     glfwDestroyWindow(_window);
     glfwTerminate();
-    std::cout << "Exiting draw loop" << std::endl;
 }
 
 } // imgui_editor

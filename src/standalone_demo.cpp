@@ -1,6 +1,3 @@
-#ifdef WINDOWS
-#include <windows.h>
-#endif
 #include <thread>
 #include <iostream>
 #include <csignal>
@@ -8,7 +5,9 @@
 #ifdef LINUX
 #include <X11/Xlib.h>
 #endif
-
+#ifdef WINDOWS
+#include <windows.h>
+#endif
 
 #include "aeffeditor.h"
 #include "imgui_editor/imgui_editor.h"
@@ -21,9 +20,8 @@ void signal_handler([[maybe_unused]] int sig_number)
 }
 
 #ifdef LINUX
-Window* create_native_window(ERect rect)
+Window create_native_window(ERect rect, Display* display)
 {
-    auto display = XOpenDisplay(nullptr);
     int blackColor = BlackPixel(display, DefaultScreen(display));
     Window x11w = XCreateSimpleWindow(display, DefaultRootWindow(display), rect.left, rect.top,
         rect.right, rect.bottom, 0, blackColor, blackColor);
@@ -33,6 +31,7 @@ Window* create_native_window(ERect rect)
     auto res = XMapWindow(display, x11w);
     std::cout << "Map wind: " << res << std::endl;
     XSync(display, False);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
     return x11w;
 }
 #endif
@@ -111,8 +110,7 @@ int main(int, char**)
 
     /* Create a dummy plugin instance and pass to the Editor's factory function */
     AudioEffect plugin_dummy_instance;
-    auto editor = imgui_editor::create_editor(&plugin_dummy_instance,
-                                              AudioEffect::PARAMETER_COUNT);
+    auto editor = imgui_editor::create_editor(&plugin_dummy_instance, AudioEffect::PARAMETER_COUNT);
 
     /* Get the size of the Editor and create a system window to match this,
      * Essentially mimicking what a plugin host would do */
@@ -120,11 +118,16 @@ int main(int, char**)
     ERect* rect_ptr = &rect;
     editor->getRect(&rect_ptr);
     //auto b = get_val(5);
-    auto native_win = create_native_window(rect);
 
 #ifdef LINUX
+    auto display = XOpenDisplay(nullptr);
+    auto native_win = create_native_window(rect, display);
+
     XEvent x_event;
-#endif 
+#endif
+#ifdef WINDOWS
+    auto native_win = create_native_window(rect);
+#endif
 
     editor->open(&native_win);
 
@@ -145,18 +148,14 @@ int main(int, char**)
             DispatchMessage(&msg);
         }
 #endif
-        //XPutBackEvent(display, &x_event);
-        //std::cout << "Xevent: " << x_event.type <<std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         editor->idle();
     }
     editor->close();
-    std::cout << "Destroying windows" << std::endl;
 
 #ifdef LINUX
     XCloseDisplay(display);
 #endif
     std::cout << "Bye!" << std::endl;
-
     return 0;
 }

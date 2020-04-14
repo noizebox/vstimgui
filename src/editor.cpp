@@ -276,7 +276,9 @@ void Editor::_draw_loop(void* window)
         for (int i = 0; i < param_count; ++i)
         {
             ImGui::SameLine(10 + i * PARAM_SPACING, 10);
-            ImGui::VSliderFloat(("##" + param_names[i]).c_str(), slider_s, &param_values[i], 0, 1.0f, 0);
+            /* Hint, we're passing a format string of \"\" to keep ImGui
+             * from printing the value inside the slider */
+            ImGui::VSliderFloat(("##" + param_names[i]).c_str(), slider_s, &param_values[i], 0, 1.0f, "");
             if (ImGui::IsItemActive())
             {
                 _effect->setParameterAutomated(i, param_values[i]);

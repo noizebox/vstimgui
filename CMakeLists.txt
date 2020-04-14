@@ -12,9 +12,7 @@ endif()
 find_package(glfw3 REQUIRED)
 find_package(OpenGL REQUIRED)
 
-set(SOURCE_FILES src/standalone_demo.cpp
-                 src/editor.cpp
-                 src/custom_widgets.cpp)
+set(SOURCE_FILES src/editor.cpp)
 
 set(IMGUI_FILES imgui/imgui.cpp
                 imgui/imgui_draw.cpp

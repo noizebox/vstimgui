@@ -62,7 +62,7 @@ static void glfw_error_callback(int error, const char*description)
 class Editor : public AEffEditor
 {
 public:
-    Editor(AudioEffect* instance, int num_parameters);
+    Editor(AudioEffect* instance);
 
     bool getRect(ERect**rect) override;
 

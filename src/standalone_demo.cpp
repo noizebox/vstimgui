@@ -110,7 +110,7 @@ int main(int, char**)
 
     /* Create a dummy plugin instance and pass to the Editor's factory function */
     AudioEffect plugin_dummy_instance;
-    auto editor = imgui_editor::create_editor(&plugin_dummy_instance, AudioEffect::PARAMETER_COUNT);
+    auto editor = imgui_editor::create_editor(&plugin_dummy_instance);
 
     /* Get the size of the Editor and create a system window to match this,
      * Essentially mimicking what a plugin host would do */

@@ -1,8 +1,9 @@
 #include <iostream>
 #include <chrono>
+#include <array>
+#include <string>
 
 #include "editor.h"
-#include "custom_widgets.h"
 
 #ifdef LINUX
 #include <X11/Xlib.h>
@@ -10,20 +11,24 @@
 
 namespace imgui_editor {
 
-constexpr int WINDOW_WIDTH = 800;
-constexpr int WINDOW_HEIGHT = 400;
+constexpr int WINDOW_WIDTH = 500;
+constexpr int WINDOW_HEIGHT = 300;
+constexpr int PARAM_SPACING = 50;
+constexpr int MAX_PARAMETERS = 10;
+constexpr int PING_INTERVALL = 300;
 constexpr float SMOOTH_FACT = 0.05;
 const char* glsl_version = "#version 130";
 
-std::unique_ptr<AEffEditor> create_editor(AudioEffect* instance, int num_parameters)
+std::unique_ptr<AEffEditor> create_editor(AudioEffect* instance)
 {
-    return std::make_unique<Editor>(instance, num_parameters);
+    return std::make_unique<Editor>(instance);
 }
 
-Editor::Editor(AudioEffect* instance, int num_parameters) : AEffEditor::AEffEditor(instance),
-                                                           _num_parameters(num_parameters),
-                                                           _rect{0, 0, WINDOW_HEIGHT, WINDOW_WIDTH}
-{}
+Editor::Editor(AudioEffect* instance) : AEffEditor::AEffEditor(instance),
+                                        _rect{0, 0, WINDOW_HEIGHT, WINDOW_WIDTH}
+{
+    _num_parameters = instance->getAeffect()->numParams;
+}
 
 bool Editor::open(void* window)
 {
@@ -203,6 +208,28 @@ void Editor::_draw_loop(void* window)
     _setup_open_gl(window);
     _setup_imgui();
     int count = 0;
+    /* Only display a maximum of 10 parameters in this demo */
+    int param_count = std::min(_num_parameters, MAX_PARAMETERS);
+
+    /* It's somewhat against the philosophy of an immediate mode gui to
+     * hold a separate state in the gui class, but I would still prefer
+     * to mirror the parameter values here than polling at 60 Hz or
+     * sharing a state with the dsp model.
+     * It's just a demo anyway :) You can do as you please */
+
+    std::array<float, MAX_PARAMETERS> param_values;
+    for (int i = 0; i < param_count; ++i)
+    {
+        param_values[i] = _effect->getParameter(i);
+    }
+
+    std::array<std::string, MAX_PARAMETERS> param_names;
+    for (int i = 0; i < param_count; ++i)
+    {
+        char buffer[64];
+        _effect->getParameterName(i, buffer);
+        param_names[i] = buffer;
+    }
 
     float draw_time = 0;
     float render_time = 0;
@@ -230,76 +257,46 @@ void Editor::_draw_loop(void* window)
                                     ImGuiWindowFlags_NoMove);
         //ImGui::BeginGroup();
         ImU32 colour = ImColor(0x41, 0x7c, 0x8c, 0xff);
-        ImU32 colour2 = ImColor(0x61, 0x5c, 0x9c, 0xff);
-        ImU32 colour_bg = ImColor(0x31, 0x5c, 0x6c, 0xff);
-        ImU32 colour2_bg = ImColor(0x41, 0x4c, 0x7c, 0xff);
+
         ImDrawList*draw_list = ImGui::GetWindowDrawList();
-        //draw_list->AddRectFilled(ImVec2(8, 8), ImVec2(183, 158), colour_bg,3.0f, ImDrawCornerFlags_All);
-        draw_list->AddRectFilled(ImVec2(5, 5), ImVec2(180, 155), colour, 3.0f, ImDrawCornerFlags_All);
-        //draw_list->AddRectFilled(ImVec2(8, 163), ImVec2(183, 318), colour2_bg,3.0f, ImDrawCornerFlags_All);
-        draw_list->AddRectFilled(ImVec2(5, 160), ImVec2(180, 315), colour2, 3.0f, ImDrawCornerFlags_All);
+        draw_list->AddRectFilled(ImVec2(5, 5), ImVec2(param_count * PARAM_SPACING + 10, 180), colour, 3.0f, ImDrawCornerFlags_All);
 
-
-        ImGui::Text("Filter ADSR");               // Display some text (you can use a format strings too)
+        ImGui::Text("Parameters");
         ImGui::NewLine();
-        ImGui::SameLine(10, 10);
 
-        ImGui::VSliderFloat("##1", slider_s, &_slider_values[0], 0, 10, 0);
-        //std::cout << "Attack: " << _slider_values[0] << std::endl;
-        ImGui::SameLine(50, 10);
-        ImGui::VSliderFloat("##2", slider_s, &_slider_values[1], 0, 10, 0);
-        if (ImGui::IsItemActive())
+        /* Draw parameter labels */
+        for (int i = 0; i < param_count; ++i)
         {
-            std::cout << "Decay: " << _slider_values[1] << std::endl;
+            ImGui::SameLine(8 + i * PARAM_SPACING, 10);
+            ImGui::TextUnformatted(param_names[i].c_str());
         }
-        ImGui::SameLine(90, 10);
-        ImGui::VSliderFloat("##3", slider_s, &_slider_values[2], 0, 10, 0);
-        ImGui::SameLine(130, 10);
-        ImGui::VSliderFloat("##4", slider_s, &_slider_values[3], 0, 10, 0);
-        //ImGui::EndGroup();
         ImGui::NewLine();
-        ImGui::SameLine(10, 10);
-        ImGui::TextUnformatted("Atk");
-        ImGui::SameLine(60);
-        ImGui::TextUnformatted("Dec");
-        ImGui::SameLine(100);
-        ImGui::TextUnformatted("Sus");
-        ImGui::SameLine(140);
-        ImGui::TextUnformatted("Rel");
 
-        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5.0f);
-        ImGui::Text("Amp ADSR");               // Display some text (you can use a format strings too)
-
-        ImGui::NewLine();
-        ImGui::SameLine(10, 10);
-
-        ImGui::VSliderFloatExt("##5", slider_s, &_slider_values[4], 0, 10, 0);
-        //std::cout << "Attack: " << _slider_values[0] << std::endl;
-        ImGui::SameLine(50, 10);
-        ImGui::VSliderFloatExt("##6", slider_s, &_slider_values[5], 0, 10, 0);
-        if (ImGui::IsItemActive())
+        /* Draw parameter sliders */
+        for (int i = 0; i < param_count; ++i)
         {
-            std::cout << "Decay2: " << _slider_values[5] << std::endl;
+            ImGui::SameLine(10 + i * PARAM_SPACING, 10);
+            ImGui::VSliderFloat(("##" + param_names[i]).c_str(), slider_s, &param_values[i], 0, 1.0f, 0);
+            if (ImGui::IsItemActive())
+            {
+                _effect->setParameterAutomated(i, param_values[i]);
+            }
         }
-        ImGui::SameLine(90, 10);
-        ImGui::VSliderFloatExt("##7", slider_s, &_slider_values[6], 0, 10, 0);
-        ImGui::SameLine(130, 10);
-        ImGui::VSliderFloatExt("##8", slider_s, &_slider_values[7], 0, 10, 0);
-        //ImGui::EndGroup();
         ImGui::NewLine();
-        ImGui::SameLine(10, 10);
-        ImGui::TextUnformatted("Atk");
-        ImGui::SameLine(60);
-        ImGui::TextUnformatted("Dec");
-        ImGui::SameLine(100);
-        ImGui::TextUnformatted("Sus");
-        ImGui::SameLine(140);
-        ImGui::TextUnformatted("Rel");
 
-        ImGui::Text("Draw time: %f ms", draw_time);
-        ImGui::Text("Render time: %f ms", render_time);
-        ImGui::Text("Open GL render time: %f ms", gl_render_time);
-        ImGui::Text("Swap time: %f ms", swap_time);
+        /* Draw a value display */
+        for (int i = 0; i < param_count; ++i)
+        {
+            ImGui::SameLine(7 + i * PARAM_SPACING, 10);
+            ImGui::Text("%.2f", param_values[i]);
+        }
+
+        /* Finally show some statistics on cpu usage */
+        ImGui::NewLine();
+        ImGui::Text("Draw time: %.4f ms", draw_time);
+        ImGui::Text("Render time: %.4f ms", render_time);
+        ImGui::Text("Open GL render time: %.4f ms", gl_render_time);
+        ImGui::Text("Swap time: %.4f ms", swap_time);
         ImGui::End();
         //}
         auto split_time = std::chrono::high_resolution_clock::now();
@@ -318,9 +315,9 @@ void Editor::_draw_loop(void* window)
         auto split3_time = std::chrono::high_resolution_clock::now();
         glfwSwapBuffers(_window);
         auto end_time = std::chrono::high_resolution_clock::now();
-        if (count++ % 60 == 0)
+        if (count++ % PING_INTERVALL == 0)
         {
-            std::cout << "Ping " << count / 60 << std::endl;
+            std::cout << "Ping " << count / PING_INTERVALL << std::endl;
         }
 
         /* Filter the timings so they look a bit nicer */

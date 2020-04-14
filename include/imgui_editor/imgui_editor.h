@@ -7,7 +7,7 @@
 
 namespace imgui_editor {
 
-std::unique_ptr<AEffEditor> create_editor(AudioEffect* instance, int num_parameters);
+std::unique_ptr<AEffEditor> create_editor(AudioEffect* instance);
 
 }
 #endif //IMPLUGINGUI_IMGUI_EDITOR_H

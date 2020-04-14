@@ -16,11 +16,22 @@
 #include <cassert>
 #include <array>
 #include <string_view>
+#include <cstring>
+
+struct AEffect
+{
+    int numParams;
+};
 
 class AudioEffect
 {
 public:
     AudioEffect() = default;
+
+    AEffect* getAeffect ()
+    {
+        return &_effect;
+    }
 
     float getParameter(int index)
     {
@@ -40,12 +51,15 @@ public:
     void getParameterName(int index, char* text)
     {
         assert(index < _parameters.size());
+        memset(text, 0, 8);
         std::copy(_parameters[index].name.begin(), _parameters[index].name.end(), text);
     }
 
     static constexpr int PARAMETER_COUNT = 8;
 
 private:
+    AEffect  _effect{.numParams = PARAMETER_COUNT};
+
     struct Parameter
     {
         std::string_view name;

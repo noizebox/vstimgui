@@ -2,6 +2,7 @@
 #include <chrono>
 #include <array>
 #include <string>
+#include <algorithm>
 
 #include "editor.h"
 
@@ -12,7 +13,7 @@
 namespace imgui_editor {
 
 constexpr int WINDOW_WIDTH = 500;
-constexpr int WINDOW_HEIGHT = 300;
+constexpr int WINDOW_HEIGHT = 320;
 constexpr int PARAM_SPACING = 50;
 constexpr int MAX_PARAMETERS = 10;
 constexpr int PING_INTERVALL = 300;
@@ -116,7 +117,7 @@ bool Editor::_setup_open_gl(void* host_window)
     //SetWindowLongPtr(hWnd, GWL_STYLE, (GetWindowLongPtr(hWnd, GWL_STYLE) & ~WS_POPUP) | WS_CHILD);
     if (SetParent(hWnd, *reinterpret_cast<HWND*>(host_window)))
     {
-        _host_window = host_window;
+        _host_window = static_cast<HWND*>(host_window);
     }
     else
     {

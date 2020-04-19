@@ -58,7 +58,7 @@ public:
     static constexpr int PARAMETER_COUNT = 8;
 
 private:
-    AEffect  _effect{.numParams = PARAMETER_COUNT};
+    AEffect  _effect{PARAMETER_COUNT};
 
     struct Parameter
     {

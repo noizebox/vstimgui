@@ -55,7 +55,7 @@ HWND create_native_window(ERect rect)
     HWND hwnd = CreateWindowEx(
         0,                              // Optional window styles.
         CLASS_NAME,                     // Window class
-        "Learn to Program Windows",     // Window text
+        CLASS_NAME,                     // Window text
         WS_OVERLAPPEDWINDOW,            // Window style
 
         // Size and position
@@ -81,23 +81,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uMsg)
     {
-    case WM_DESTROY:
-        PostQuitMessage(0);
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            running = false;
+            return 0;
+
+        case WM_PAINT:
+        {
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hwnd, &ps);
+
+            FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
+
+            EndPaint(hwnd, &ps);
+        }
         return 0;
-
-    case WM_PAINT:
-    {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hwnd, &ps);
-
-
-
-        FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
-
-        EndPaint(hwnd, &ps);
-    }
-    return 0;
-
     }
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
@@ -117,7 +115,6 @@ int main(int, char**)
     ERect rect;
     ERect* rect_ptr = &rect;
     editor->getRect(&rect_ptr);
-    //auto b = get_val(5);
 
 #ifdef LINUX
     auto display = XOpenDisplay(nullptr);

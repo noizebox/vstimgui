@@ -5,6 +5,7 @@
 #include <thread>
 #include <cstdio>
 
+#define NOMINMAX
 #include "aeffeditor.h"
 #include "imgui_editor/imgui_editor.h"
 

@@ -89,7 +89,7 @@ private:
 #ifdef LINUX
     Window _host_window;
 #elif WINDOWS
-    HWND* _host_window;
+    HWND _host_window;
 #endif
 
     GLFWwindow*_window;

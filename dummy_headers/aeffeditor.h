@@ -88,7 +88,7 @@ struct ERect
 class AEffEditor
 {
 public:
-    AEffEditor (AudioEffect* effect = nullptr) : _effect(effect) {}
+    AEffEditor (AudioEffect* effect = nullptr) : effect(effect) {}
 
     virtual ~AEffEditor () = default;
 
@@ -98,7 +98,7 @@ public:
     virtual void idle() = 0;
 
 protected:
-    AudioEffect* _effect;
+    AudioEffect* effect;
     void*        _main_window;
 };
 

@@ -40,10 +40,17 @@ bool Editor::open(void* window)
 
 void Editor::close()
 {
-    _running = false;
-    if (_update_thread.joinable())
+    if (_running)
     {
-        _update_thread.join();
+#ifdef WINDOWS
+        HWND hWnd = glfwGetWin32Window(_window);
+        SetParent(hWnd, nullptr);
+#endif
+       _running = false;
+        if (_update_thread.joinable())
+        {
+            _update_thread.join();
+        }
     }
 }
 
@@ -113,11 +120,12 @@ bool Editor::_setup_open_gl(void* host_window)
 #ifdef WINDOWS
     HWND hWnd = glfwGetWin32Window(_window);
     //SetWindowLongPtr(hWnd, GWL_STYLE, WS_POPUP | WS_CHILD);
-    auto parent = GetParent(hWnd);
+    //auto parent = GetParent(hWnd);
     //SetWindowLongPtr(hWnd, GWL_STYLE, (GetWindowLongPtr(hWnd, GWL_STYLE) & ~WS_POPUP) | WS_CHILD);
-    if (SetParent(hWnd, *reinterpret_cast<HWND*>(host_window)))
+    //SetWindowLongPtr(hWnd, GWL_STYLE, (GetWindowLongPtr(hWnd, GWL_STYLE) & ~WS_POPUP) | WS_CHILD);
+    if (SetParent(hWnd, reinterpret_cast<HWND>(host_window)))
     {
-        _host_window = static_cast<HWND*>(host_window);
+        _host_window = static_cast<HWND>(host_window);
     }
     else
     {
@@ -197,7 +205,7 @@ bool Editor::_setup_imgui()
 
 bool Editor::getRect(ERect** rect)
 {
-    **rect = _rect;
+    *rect = &_rect;
     return true;
 }
 
@@ -221,14 +229,15 @@ void Editor::_draw_loop(void* window)
     std::array<float, MAX_PARAMETERS> param_values;
     for (int i = 0; i < param_count; ++i)
     {
-        param_values[i] = _effect->getParameter(i);
+        param_values[i] = effect->getParameter(i);
     }
 
     std::array<std::string, MAX_PARAMETERS> param_names;
     for (int i = 0; i < param_count; ++i)
     {
         char buffer[64];
-        _effect->getParameterName(i, buffer);
+        std::fill(buffer, buffer + 64, 0);
+        effect->getParameterName(i, buffer);
         param_names[i] = buffer;
     }
 
@@ -282,7 +291,7 @@ void Editor::_draw_loop(void* window)
             ImGui::VSliderFloat(("##" + param_names[i]).c_str(), slider_s, &param_values[i], 0, 1.0f, "");
             if (ImGui::IsItemActive())
             {
-                _effect->setParameterAutomated(i, param_values[i]);
+                effect->setParameterAutomated(i, param_values[i]);
             }
         }
         ImGui::NewLine();
@@ -329,7 +338,6 @@ void Editor::_draw_loop(void* window)
         gl_render_time = (1.0f - SMOOTH_FACT) * gl_render_time + SMOOTH_FACT * (split3_time - split2_time).count() / 1'000'000.0f;
         swap_time = (1.0f - SMOOTH_FACT) * swap_time + SMOOTH_FACT * (end_time - split3_time).count() / 1'000'000.0f;
     }
-
     /* Cleanup on exit */
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

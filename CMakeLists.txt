@@ -3,6 +3,7 @@ project(implugingui)
 
 OPTION(BUILD_STANDALONE "Build a standalone dummy version" ON)
 set(VST2_SDK "empty" CACHE STRING "Path to Vst 2.4 sdk")
+set(INCLUDED_FONT ${PROJECT_SOURCE_DIR}/imgui/misc/fonts/Roboto-Medium.ttf CACHE STRING "Path to font file to include in build")
 set(OpenGL_GL_PREFERENCE "GLVND")
 
 if(UNIX)
@@ -11,6 +12,9 @@ if(UNIX)
 endif()
 find_package(glfw3 REQUIRED)
 find_package(OpenGL REQUIRED)
+
+add_executable(binary_to_compressed EXCLUDE_FROM_ALL imgui/misc/fonts/binary_to_compressed_c.cpp)
+execute_process(COMMAND ./binary_to_compressed ${INCLUDED_FONT} font OUTPUT_FILE ${PROJECT_SOURCE_DIR}/generated/font.h)
 
 set(SOURCE_FILES src/editor.cpp)
 
@@ -42,6 +46,7 @@ target_include_directories(implugingui PRIVATE imgui)
 target_include_directories(implugingui PRIVATE imgui/examples)
 target_include_directories(implugingui PRIVATE imgui/examples/libs/gl3w)
 target_include_directories(implugingui PRIVATE src)
+target_include_directories(implugingui PRIVATE generated)
 target_include_directories(implugingui PUBLIC  include)
 
 if (BUILD_STANDALONE)

@@ -46,7 +46,16 @@ void Editor::close()
         HWND hWnd = glfwGetWin32Window(_window);
         SetParent(hWnd, nullptr);
 #endif
-       _running = false;
+#ifdef LINUX
+        Window root;
+        Window parent;
+        auto display = glfwGetX11Display();
+        auto x11_win = glfwGetX11Window(_window);
+
+        XQueryTree(display, x11_win, &root, &parent, nullptr, nullptr);
+        XReparentWindow(display, parent, root, 0, 0);
+#endif
+        _running = false;
         if (_update_thread.joinable())
         {
             _update_thread.join();
@@ -95,7 +104,7 @@ bool Editor::_setup_open_gl(void* host_window)
     Window parent;
     Window *child_list;
     unsigned int nch;
-    XID host_win = *reinterpret_cast<Window*>(host_window);
+    XID host_win = reinterpret_cast<Window>(host_window);
     _host_window = host_win;
     auto display = glfwGetX11Display();
     auto x11_win = glfwGetX11Window(_window);
@@ -132,8 +141,8 @@ bool Editor::_setup_open_gl(void* host_window)
         std::cout << GetLastError() << std::endl;
     }
     //SetWindowPos(hWnd, HWND_TOP , 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, SWP_SHOWWINDOW);
- 
 #endif
+
     glfwMakeContextCurrent(_window);
     glfwSwapInterval(1);
 

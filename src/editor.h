@@ -78,13 +78,12 @@ private:
 
     bool _setup_imgui();
 
-    int _num_parameters;
-
     void _draw_loop(void* window);
 
+    int              _num_parameters;
     std::atomic_bool _running{false};
-    std::thread _update_thread;
-    ERect _rect;
+    std::thread      _update_thread;
+    ERect            _rect;
 
 #ifdef LINUX
     Window _host_window;

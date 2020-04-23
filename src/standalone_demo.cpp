@@ -20,11 +20,11 @@ void signal_handler([[maybe_unused]] int sig_number)
 }
 
 #ifdef LINUX
-Window create_native_window(ERect rect, Display* display)
+Window create_native_window(ERect* rect, Display* display)
 {
     int blackColor = BlackPixel(display, DefaultScreen(display));
-    Window x11w = XCreateSimpleWindow(display, DefaultRootWindow(display), rect.left, rect.top,
-        rect.right, rect.bottom, 0, blackColor, blackColor);
+    Window x11w = XCreateSimpleWindow(display, DefaultRootWindow(display), rect->left, rect->top,
+        rect->right, rect->bottom, 0, blackColor, blackColor);
     std::cout << "Window id: " << x11w << ", display: " << display << std::endl;
     XSync(display, False);
 
@@ -112,9 +112,8 @@ int main(int, char**)
 
     /* Get the size of the Editor and create a system window to match this,
      * Essentially mimicking what a plugin host would do */
-    ERect rect;
-    ERect* rect_ptr = &rect;
-    editor->getRect(&rect_ptr);
+    ERect* rect = nullptr;
+    editor->getRect(&rect);
 
 #ifdef LINUX
     auto display = XOpenDisplay(nullptr);
@@ -126,7 +125,7 @@ int main(int, char**)
     auto native_win = create_native_window(rect);
 #endif
 
-    editor->open(&native_win);
+    editor->open(reinterpret_cast<void*>(native_win));
 
     while(running == true)
     {

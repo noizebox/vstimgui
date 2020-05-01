@@ -12,6 +12,12 @@
 #include "aeffeditor.h"
 #include "imgui_editor/imgui_editor.h"
 
+constexpr int EVENT_MASK = StructureNotifyMask | KeyPressMask | KeyReleaseMask |
+                           PointerMotionMask | ButtonPressMask | ButtonReleaseMask |
+                           ExposureMask | FocusChangeMask | VisibilityChangeMask |
+                           EnterWindowMask | LeaveWindowMask | PropertyChangeMask |
+                           OwnerGrabButtonMask | ButtonMotionMask;
+
 std::atomic_bool running = true;
 
 void signal_handler([[maybe_unused]] int sig_number)
@@ -25,13 +31,11 @@ Window create_native_window(ERect* rect, Display* display)
     int blackColor = BlackPixel(display, DefaultScreen(display));
     Window x11w = XCreateSimpleWindow(display, DefaultRootWindow(display), rect->left, rect->top,
         rect->right, rect->bottom, 0, blackColor, blackColor);
-    std::cout << "Window id: " << x11w << ", display: " << display << std::endl;
-    XSync(display, False);
+    XSelectInput(display, x11w, EVENT_MASK);
+    std::cout << "Window id: " << x11w << ", display: " << display << ", root: " << DefaultRootWindow(display) << std::endl;
 
     auto res = XMapWindow(display, x11w);
-    std::cout << "Map wind: " << res << std::endl;
     XSync(display, False);
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
     return x11w;
 }
 #endif
@@ -109,6 +113,7 @@ int main(int, char**)
     /* Create a dummy plugin instance and pass to the Editor's factory function */
     AudioEffect plugin_dummy_instance;
     auto editor = imgui_editor::create_editor(&plugin_dummy_instance);
+    auto editor_2 = imgui_editor::create_editor(&plugin_dummy_instance);
 
     /* Get the size of the Editor and create a system window to match this,
      * Essentially mimicking what a plugin host would do */
@@ -119,6 +124,10 @@ int main(int, char**)
     auto display = XOpenDisplay(nullptr);
     auto native_win = create_native_window(rect, display);
 
+
+    auto native_win_2 = create_native_window(rect, display);
+
+
     XEvent x_event;
 #endif
 #ifdef WINDOWS
@@ -126,6 +135,7 @@ int main(int, char**)
 #endif
 
     editor->open(reinterpret_cast<void*>(native_win));
+    editor_2->open(reinterpret_cast<void*>(native_win_2));
 
     while(running == true)
     {

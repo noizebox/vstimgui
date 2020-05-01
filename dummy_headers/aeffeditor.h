@@ -35,22 +35,20 @@ public:
 
     float getParameter(int index)
     {
-        assert(index < _parameters.size());
+        assert(static_cast<size_t>(index) < _parameters.size());
         return _parameters[index].value;
     }
 
     void setParameterAutomated(int index, float value)
     {
-        assert(index < _parameters.size());
+        assert(static_cast<size_t>(index) < _parameters.size());
         _parameters[index].value = value;
         std::cout << "Parameter " << _parameters[index].name << ": " << value << std::endl;
     }
 
-    //void getParameterLabel(int index, char* label) = 0;
-    //void getParameterDisplay(int index, char* text) = 0;
     void getParameterName(int index, char* text)
     {
-        assert(index < _parameters.size());
+        assert(static_cast<size_t>(index) < _parameters.size());
         memset(text, 0, 8);
         std::copy(_parameters[index].name.begin(), _parameters[index].name.end(), text);
     }

@@ -1,9 +1,9 @@
 ## Vst 2.4 Plugin Editor with DearImGui
-Example Open GL plugin editor using Dear ImGui with a glfw backend. It includes a small demo application for building it standalone with a dummy plugin, but should be possible to attach to an existing Vst2.4 plugin. Mostly intended as a demonstration of how one can setup a Vst Editor with Dear ImGui, as it's a quite attractive framework to use.
+Work in progess. Example Open GL plugin editor using Dear ImGui with a glfw backend. It includes a small demo application for building it standalone with a dummy plugin, but can be included in an existing Vst2.4 plugin. Mostly intended as a demonstration of how one can setup a Vst Editor with Dear ImGui, as it's a quite attractive framework to use.
 
-As the Vst2.4 SDK is deprecated and not supported by Steinberg anymore, I cannot include it in the repo. To build an editor that will work with a real plugin and not just the supplied demo plugin, you'll need the real sdk.
+As the Vst2.4 SDK is deprecated and not supported by Steinberg anymore, it cannot be include it in the repo. To build an editor that will work with a real plugin and not just the supplied demo plugin, you'll need the real sdk. See the CMakeLists.txt file for how to add the path to it.
 
-Currently the editor part is very limited and mostly as an example. It will display sliders for up 10 parameters and some statistics on the draw time. 
+Currently the editor part is very limited and mostly intended as an example how to set things up. It will display sliders for up 10 parameters and some statistics on the draw time. 
 
 ### Building
 Clone and initialise all submodules (or clone with the --recurse-submodules option), call cmake in a build dir and call 'make'.

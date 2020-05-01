@@ -24,47 +24,26 @@ constexpr int PING_INTERVALL = 300;
 constexpr float SMOOTH_FACT = 0.05;
 const char* glsl_version = "#version 130";
 
-std::mutex Editor::_init_lock;
-#ifdef WINDOWS
-void reparent_window(GLFWwindow* window, void* host_window)
-{
-    HWND hWnd = glfwGetWin32Window(_window);
-    //SetWindowLongPtr(hWnd, GWL_STYLE, WS_POPUP | WS_CHILD);
-    //auto parent = GetParent(hWnd);
-    //SetWindowLongPtr(hWnd, GWL_STYLE, (GetWindowLongPtr(hWnd, GWL_STYLE) & ~WS_POPUP) | WS_CHILD);
-    //SetWindowLongPtr(hWnd, GWL_STYLE, (GetWindowLongPtr(hWnd, GWL_STYLE) & ~WS_POPUP) | WS_CHILD);
-    if (SetParent(hWnd, reinterpret_cast<HWND>(host_window)))
-    {
-        _host_window = static_cast<HWND>(host_window);
-    }
-    else
-    {
-        std::cout << GetLastError() << std::endl;
-    }
-}
+<<<<<<< HEAD
+constexpr int EVENT_MASK = StructureNotifyMask | KeyPressMask | KeyReleaseMask |
+                           PointerMotionMask | ButtonPressMask | ButtonReleaseMask |
+                           ExposureMask | FocusChangeMask | VisibilityChangeMask |
+                           EnterWindowMask | LeaveWindowMask | PropertyChangeMask |
+                           OwnerGrabButtonMask | ButtonMotionMask;
 
+std::mutex Editor::_init_lock;
+=======
+#ifdef WINDOWS
 void reparent_window_to_root(GLFWwindow* window)
 {
     HWND hWnd = glfwGetWin32Window(window);
     SetParent(hWnd, nullptr);
 }
 #endif
-
 #ifdef LINUX
-void reparent_window(GLFWwindow* window, void* host_window)
-{
-    Window host_x11_win = reinterpret_cast<Window>(host_window);
-    auto display = glfwGetX11Display();
-    auto glfw_x11_win = glfwGetX11Window(window);
-
-    XReparentWindow(display, glfw_x11_win, host_x11_win, 0,0);// h_offset);
-    glfwFocusWindow(window);
-    XRaiseWindow(display, glfw_x11_win);
-    XSync(display, true);
-}
-
 void reparent_window_to_root([[maybe_unused]]GLFWwindow* window) {}
 #endif
+>>>>>>> origin/master
 
 std::unique_ptr<AEffEditor> create_editor(AudioEffect* instance)
 {
@@ -90,7 +69,17 @@ void Editor::close()
 
     if (_running)
     {
+<<<<<<< HEAD
+#ifdef WINDOWS
+        HWND hWnd = glfwGetWin32Window(_window);
+        SetParent(hWnd, nullptr);
+#endif
+#ifdef LINUX
+        /* Maybe we should reparent the window back */
+#endif
+=======
         reparent_window_to_root(_window);
+>>>>>>> origin/master
         _running = false;
         if (_update_thread.joinable())
         {
@@ -108,13 +97,21 @@ bool Editor::_setup_open_gl(void* host_window)
     }
     /* Until this feature is done in glfw https://github.com/glfw/glfw/issues/25
      * Open a glfw window and set it's native window a child of the host provided window */
-    
+
     // GL 3.0 + GLSL 130
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+<<<<<<< HEAD
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+#endif
+=======
 
+>>>>>>> origin/master
+#ifdef WINDOWS
+    /* On Linux we can't, for some reason, not reparent an undecorated window */
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+#endif
     _window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Dear ImGui Plugin UI", nullptr, nullptr);
     if (_window == nullptr)
     {
@@ -122,7 +119,34 @@ bool Editor::_setup_open_gl(void* host_window)
         return false;
     }
 
-    reparent_window(_window, host_window);
+#ifdef LINUX
+    _host_window = reinterpret_cast<Window>(host_window);
+    auto display = glfwGetX11Display();
+    auto x11_win = glfwGetX11Window(_window);
+
+    XReparentWindow(display, x11_win, _host_window, 0,0);// h_offset);
+    glfwFocusWindow(_window);
+    XRaiseWindow(display, x11_win);
+    XSync(display, true);
+#endif
+
+#ifdef WINDOWS
+    HWND hWnd = glfwGetWin32Window(_window);
+    //SetWindowLongPtr(hWnd, GWL_STYLE, WS_POPUP | WS_CHILD);
+    //auto parent = GetParent(hWnd);
+    //SetWindowLongPtr(hWnd, GWL_STYLE, (GetWindowLongPtr(hWnd, GWL_STYLE) & ~WS_POPUP) | WS_CHILD);
+    //SetWindowLongPtr(hWnd, GWL_STYLE, (GetWindowLongPtr(hWnd, GWL_STYLE) & ~WS_POPUP) | WS_CHILD);
+    if (SetParent(hWnd, reinterpret_cast<HWND>(host_window)))
+    {
+        _host_window = static_cast<HWND>(host_window);
+    }
+    else
+    {
+        std::cout << GetLastError() << std::endl;
+    }
+    //SetWindowPos(hWnd, HWND_TOP , 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, SWP_SHOWWINDOW);
+#endif
+
     glfwMakeContextCurrent(_window);
     glfwSwapInterval(1);
 
@@ -189,6 +213,9 @@ bool Editor::getRect(ERect** rect)
 
 void Editor::idle()
 {
+<<<<<<< HEAD
+
+=======
     int param_count = std::min(_num_parameters, MAX_PARAMETERS);
     /* Quick way of updating paramter values. In a real plugin impl, you probably
      * only want to read parameter value that are "dirty" in the sense that they
@@ -197,6 +224,7 @@ void Editor::idle()
     {
         _slider_values[i] = effect->getParameter(i);
     }
+>>>>>>> origin/master
 }
 
 void Editor::_draw_loop(void* window)

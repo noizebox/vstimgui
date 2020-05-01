@@ -47,6 +47,13 @@ using namespace gl;
 
 // Include glfw3.h after our OpenGL definitions
 #include <GLFW/glfw3.h>
+
+#ifdef LINUX
+#define GLFW_EXPOSE_NATIVE_X11
+#endif
+#ifdef WINDOWS
+#define GLFW_EXPOSE_NATIVE_WIN32
+#endif
 #include <GLFW/glfw3native.h>
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1900) && !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
@@ -83,10 +90,20 @@ private:
     std::thread      _update_thread;
     ERect            _rect;
 
+#ifdef LINUX
+    Window _host_window;
+    Display* _display;
+#elif WINDOWS
+    HWND _host_window;
+#endif
+
+<<<<<<< HEAD
     static std::mutex _init_lock;
 
     GLFWwindow*_window;
-
+=======
+    GLFWwindow* _window;
+>>>>>>> origin/master
     float _slider_values[10];
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
     ImVec2 slider_s{20, 105};

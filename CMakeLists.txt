@@ -5,6 +5,8 @@ OPTION(BUILD_STANDALONE "Build a standalone dummy version" ON)
 set(VST2_SDK "empty" CACHE STRING "Path to Vst 2.4 sdk")
 set(INCLUDED_FONT ${PROJECT_SOURCE_DIR}/imgui/misc/fonts/Roboto-Medium.ttf CACHE STRING "Path to font file to include in build")
 set(OpenGL_GL_PREFERENCE "GLVND")
+set(FONT_DIR ${CMAKE_BINARY_DIR}/generated)
+
 
 if(UNIX)
     find_package(PkgConfig REQUIRED)
@@ -13,8 +15,15 @@ endif()
 find_package(glfw3 REQUIRED)
 find_package(OpenGL REQUIRED)
 
+file(MAKE_DIRECTORY ${FONT_DIR})
+
 add_executable(binary_to_compressed EXCLUDE_FROM_ALL imgui/misc/fonts/binary_to_compressed_c.cpp)
-execute_process(COMMAND ./binary_to_compressed ${INCLUDED_FONT} font OUTPUT_FILE ${PROJECT_SOURCE_DIR}/generated/font.h)
+
+add_custom_command(OUTPUT ${FONT_DIR}/font.h
+                   COMMAND ./binary_to_compressed "${INCLUDED_FONT}" font > "${FONT_DIR}/font.h"
+                   DEPENDS binary_to_compressed VERBATIM)
+
+add_custom_target(generate_font DEPENDS ${FONT_DIR}/font.h)
 
 set(SOURCE_FILES src/editor.cpp)
 
@@ -41,12 +50,13 @@ add_library(implugingui STATIC ${SOURCE_FILES} ${IMGUI_FILES})
 target_compile_features(implugingui PUBLIC cxx_std_17)
 target_compile_definitions(implugingui PRIVATE ${EDITOR_COMPILE_DEFINITIONS})
 target_compile_options(implugingui PRIVATE ${EDITOR_COMPILE_OPTIONS})
+add_dependencies(implugingui generate_font)
 
 target_include_directories(implugingui PRIVATE imgui)
 target_include_directories(implugingui PRIVATE imgui/examples)
 target_include_directories(implugingui PRIVATE imgui/examples/libs/gl3w)
 target_include_directories(implugingui PRIVATE src)
-target_include_directories(implugingui PRIVATE generated)
+target_include_directories(implugingui PRIVATE ${FONT_DIR})
 target_include_directories(implugingui PUBLIC  include)
 
 if (BUILD_STANDALONE)

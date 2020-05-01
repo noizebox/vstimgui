@@ -7,7 +7,6 @@ set(INCLUDED_FONT ${PROJECT_SOURCE_DIR}/imgui/misc/fonts/Roboto-Medium.ttf CACHE
 set(OpenGL_GL_PREFERENCE "GLVND")
 set(FONT_DIR ${CMAKE_BINARY_DIR}/generated)
 
-
 if(UNIX)
     find_package(PkgConfig REQUIRED)
     pkg_search_module(GLFW REQUIRED glfw3)
@@ -15,8 +14,9 @@ endif()
 find_package(glfw3 REQUIRED)
 find_package(OpenGL REQUIRED)
 
+# The font used is compiled into the binary itself using the ImGui supplied tool to
+# convert it to a header file.
 file(MAKE_DIRECTORY ${FONT_DIR})
-
 add_executable(binary_to_compressed EXCLUDE_FROM_ALL imgui/misc/fonts/binary_to_compressed_c.cpp)
 
 add_custom_command(OUTPUT ${FONT_DIR}/font.h
@@ -35,7 +35,6 @@ set(IMGUI_FILES imgui/imgui.cpp
                 imgui/examples/libs/gl3w/GL/gl3w.c)
 
 set(EDITOR_LINK_LIBRARIES glfw ${OPENGL_LIBRARIES})
-#set(EDITOR_COMPILE_DEFINITIONS -DIMGUI_IMPL_OPENGL_LOADER_GLAD=1)
 
 if(UNIX)
     set(EDITOR_COMPILE_OPTIONS -Wall -Wextra -Wno-psabi -ffast-math)
@@ -75,4 +74,3 @@ if (BUILD_STANDALONE)
         target_link_libraries(standalone_demo X11)
     endif()
 endif()
-

@@ -47,15 +47,6 @@ void Editor::close()
         HWND hWnd = glfwGetWin32Window(_window);
         SetParent(hWnd, nullptr);
 #endif
-#ifdef LINUX
-        Window root;
-        Window parent;
-        auto display = glfwGetX11Display();
-        auto x11_win = glfwGetX11Window(_window);
-
-        XQueryTree(display, x11_win, &root, &parent, nullptr, nullptr);
-        XReparentWindow(display, parent, root, 0, 0);
-#endif
         _running = false;
         if (_update_thread.joinable())
         {
@@ -210,7 +201,15 @@ bool Editor::getRect(ERect** rect)
 }
 
 void Editor::idle()
-{}
+{
+    int param_count = std::min(_num_parameters, MAX_PARAMETERS);
+    /* For many parameters, you only want to check parameters that are "dirty"
+     * in the sense that they have been changed from somewhere else than the UI */
+    for (int i = 0; i < param_count; ++i)
+    {
+        _slider_values[i] = effect->getParameter(i);
+    }
+}
 
 void Editor::_draw_loop(void* window)
 {
@@ -226,10 +225,9 @@ void Editor::_draw_loop(void* window)
      * sharing a state with the dsp model.
      * It's just a demo anyway :) You can do as you please */
 
-    std::array<float, MAX_PARAMETERS> param_values;
     for (int i = 0; i < param_count; ++i)
     {
-        param_values[i] = effect->getParameter(i);
+        _slider_values[i] = effect->getParameter(i);
     }
 
     std::array<std::string, MAX_PARAMETERS> param_names;
@@ -288,10 +286,10 @@ void Editor::_draw_loop(void* window)
             ImGui::SameLine(10 + i * PARAM_SPACING, 10);
             /* Hint, we're passing a format string of \"\" to keep ImGui
              * from printing the value inside the slider */
-            ImGui::VSliderFloat(("##" + param_names[i]).c_str(), slider_s, &param_values[i], 0, 1.0f, "");
+            ImGui::VSliderFloat(("##" + param_names[i]).c_str(), slider_s, &_slider_values[i], 0, 1.0f, "");
             if (ImGui::IsItemActive())
             {
-                effect->setParameterAutomated(i, param_values[i]);
+                effect->setParameterAutomated(i, _slider_values[i]);
             }
         }
         ImGui::NewLine();
@@ -300,7 +298,7 @@ void Editor::_draw_loop(void* window)
         for (int i = 0; i < param_count; ++i)
         {
             ImGui::SameLine(7 + i * PARAM_SPACING, 10);
-            ImGui::Text("%.2f", param_values[i]);
+            ImGui::Text("%.2f", _slider_values[i]);
         }
 
         /* Finally show some statistics on cpu usage */

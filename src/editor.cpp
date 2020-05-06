@@ -21,6 +21,17 @@ constexpr int PING_INTERVALL = 300;
 constexpr float SMOOTH_FACT = 0.05;
 const char* glsl_version = "#version 130";
 
+#ifdef WINDOWS
+void reparent_window_to_root(GLFWwindow* window)
+{
+    HWND hWnd = glfwGetWin32Window(window);
+    SetParent(hWnd, nullptr);
+}
+#endif
+#ifdef LINUX
+void reparent_window_to_root([[maybe_unused]]GLFWwindow* window) {}
+#endif
+
 std::unique_ptr<AEffEditor> create_editor(AudioEffect* instance)
 {
     return std::make_unique<Editor>(instance);
@@ -43,10 +54,7 @@ void Editor::close()
 {
     if (_running)
     {
-#ifdef WINDOWS
-        HWND hWnd = glfwGetWin32Window(_window);
-        SetParent(hWnd, nullptr);
-#endif
+        reparent_window_to_root(_window);
         _running = false;
         if (_update_thread.joinable())
         {
@@ -65,20 +73,11 @@ bool Editor::_setup_open_gl(void* host_window)
     /* Until this feature is done in glfw https://github.com/glfw/glfw/issues/25
      * Open a glfw window and set it's native window a child of the host provided window */
 
-    // Decide GL+GLSL versions
-#if __APPLE__
-    // GL 3.2 + GLSL 150
-    const char* glsl_version = "#version 150";
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // Required on Mac
-#else
     // GL 3.0 + GLSL 130
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-#endif
+
 #ifdef WINDOWS
     /* On Linux we can't, for some reason, not reparent an undecorated window */
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
@@ -203,8 +202,9 @@ bool Editor::getRect(ERect** rect)
 void Editor::idle()
 {
     int param_count = std::min(_num_parameters, MAX_PARAMETERS);
-    /* For many parameters, you only want to check parameters that are "dirty"
-     * in the sense that they have been changed from somewhere else than the UI */
+    /* Quick way of updating paramter values. In a real plugin impl, you probably
+     * only want to read parameter value that are "dirty" in the sense that they
+     * have recently been changed from outside the editor */
     for (int i = 0; i < param_count; ++i)
     {
         _slider_values[i] = effect->getParameter(i);

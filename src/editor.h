@@ -91,7 +91,7 @@ private:
     HWND _host_window;
 #endif
 
-    GLFWwindow*_window;
+    GLFWwindow* _window;
     float _slider_values[10];
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
     ImVec2 slider_s{20, 105};

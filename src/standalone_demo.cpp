@@ -12,11 +12,6 @@
 #include "aeffeditor.h"
 #include "imgui_editor/imgui_editor.h"
 
-constexpr int EVENT_MASK = StructureNotifyMask | KeyPressMask | KeyReleaseMask |
-                           PointerMotionMask | ButtonPressMask | ButtonReleaseMask |
-                           ExposureMask | FocusChangeMask | VisibilityChangeMask |
-                           EnterWindowMask | LeaveWindowMask | PropertyChangeMask |
-                           OwnerGrabButtonMask | ButtonMotionMask;
 
 std::atomic_bool running = true;
 
@@ -42,7 +37,7 @@ Window create_native_window(ERect* rect, Display* display)
 #ifdef WINDOWS
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-HWND create_native_window(ERect rect)
+HWND create_native_window(ERect* rect)
 {
     const char CLASS_NAME[] = "ImGui plugin UI Demo";
 
@@ -63,8 +58,8 @@ HWND create_native_window(ERect rect)
         WS_OVERLAPPEDWINDOW,            // Window style
 
         // Size and position
-        rect.left, rect.top,
-        rect.right, rect.bottom,
+        rect->left, rect->top,
+        rect->right, rect->bottom,
 
         NULL,       // Parent window    
         NULL,       // Menu
@@ -123,11 +118,7 @@ int main(int, char**)
 #ifdef LINUX
     auto display = XOpenDisplay(nullptr);
     auto native_win = create_native_window(rect, display);
-
-
     auto native_win_2 = create_native_window(rect, display);
-
-
     XEvent x_event;
 #endif
 #ifdef WINDOWS
@@ -135,7 +126,7 @@ int main(int, char**)
 #endif
 
     editor->open(reinterpret_cast<void*>(native_win));
-    editor_2->open(reinterpret_cast<void*>(native_win_2));
+    //editor_2->open(reinterpret_cast<void*>(native_win_2));
 
     while(running == true)
     {

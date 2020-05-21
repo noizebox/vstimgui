@@ -28,16 +28,8 @@ std::mutex Editor::_init_lock;
 #ifdef WINDOWS
 void reparent_window(GLFWwindow* window, void* host_window)
 {
-    HWND hWnd = glfwGetWin32Window(_window);
-    //SetWindowLongPtr(hWnd, GWL_STYLE, WS_POPUP | WS_CHILD);
-    //auto parent = GetParent(hWnd);
-    //SetWindowLongPtr(hWnd, GWL_STYLE, (GetWindowLongPtr(hWnd, GWL_STYLE) & ~WS_POPUP) | WS_CHILD);
-    //SetWindowLongPtr(hWnd, GWL_STYLE, (GetWindowLongPtr(hWnd, GWL_STYLE) & ~WS_POPUP) | WS_CHILD);
-    if (SetParent(hWnd, reinterpret_cast<HWND>(host_window)))
-    {
-        _host_window = static_cast<HWND>(host_window);
-    }
-    else
+    HWND hWnd = glfwGetWin32Window(window);
+    if (SetParent(hWnd, reinterpret_cast<HWND>(host_window)) == false)
     {
         std::cout << GetLastError() << std::endl;
     }

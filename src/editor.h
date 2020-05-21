@@ -85,7 +85,7 @@ private:
 
     static std::mutex _init_lock;
 
-    GLFWwindow*_window;
+    GLFWwindow* _window;
 
     float _slider_values[10];
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);

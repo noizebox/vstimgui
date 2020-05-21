@@ -38,7 +38,7 @@ Window create_native_window(ERect* rect, Display* display)
 #ifdef WINDOWS
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-HWND create_native_window(ERect rect)
+HWND create_native_window(ERect* rect)
 {
     const char CLASS_NAME[] = "ImGui plugin UI Demo";
 
@@ -59,8 +59,8 @@ HWND create_native_window(ERect rect)
         WS_OVERLAPPEDWINDOW,            // Window style
 
         // Size and position
-        rect.left, rect.top,
-        rect.right, rect.bottom,
+        rect->left, rect->top,
+        rect->right, rect->bottom,
 
         NULL,       // Parent window    
         NULL,       // Menu

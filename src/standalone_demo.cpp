@@ -26,7 +26,6 @@ Window create_native_window(ERect* rect, Display* display)
     int blackColor = BlackPixel(display, DefaultScreen(display));
     Window x11w = XCreateSimpleWindow(display, DefaultRootWindow(display), rect->left, rect->top,
         rect->right, rect->bottom, 0, blackColor, blackColor);
-    XSelectInput(display, x11w, EVENT_MASK);
     std::cout << "Window id: " << x11w << ", display: " << display << ", root: " << DefaultRootWindow(display) << std::endl;
 
     auto res = XMapWindow(display, x11w);
@@ -126,7 +125,7 @@ int main(int, char**)
 #endif
 
     editor->open(reinterpret_cast<void*>(native_win));
-    //editor_2->open(reinterpret_cast<void*>(native_win_2));
+    editor_2->open(reinterpret_cast<void*>(native_win_2));
 
     while(running == true)
     {

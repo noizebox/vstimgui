@@ -249,7 +249,7 @@ void Editor::_draw_loop(void* window)
         ImGui::SetNextWindowBgAlpha(0.0f);
         ImGui::Begin("__", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoMove);
-        //ImGui::BeginGroup();
+
         ImU32 colour = ImColor(0x41, 0x7c, 0x8c, 0xff);
 
         ImDrawList*draw_list = ImGui::GetWindowDrawList();

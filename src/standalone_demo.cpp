@@ -48,8 +48,7 @@ HWND create_native_window(ERect* rect)
 
     RegisterClass(&wc);
 
-    // Create the window.
-
+    /* Stolen from Microsoft example */
     HWND hwnd = CreateWindowEx(
         0,                              // Optional window styles.
         CLASS_NAME,                     // Window class
@@ -107,7 +106,6 @@ int main(int, char**)
     /* Create a dummy plugin instance and pass to the Editor's factory function */
     AudioEffect plugin_dummy_instance;
     auto editor = imgui_editor::create_editor(&plugin_dummy_instance);
-    auto editor_2 = imgui_editor::create_editor(&plugin_dummy_instance);
 
     /* Get the size of the Editor and create a system window to match this,
      * Essentially mimicking what a plugin host would do */
@@ -117,7 +115,6 @@ int main(int, char**)
 #ifdef LINUX
     auto display = XOpenDisplay(nullptr);
     auto native_win = create_native_window(rect, display);
-    auto native_win_2 = create_native_window(rect, display);
     XEvent x_event;
 #endif
 #ifdef WINDOWS
@@ -125,7 +122,6 @@ int main(int, char**)
 #endif
 
     editor->open(reinterpret_cast<void*>(native_win));
-    editor_2->open(reinterpret_cast<void*>(native_win_2));
 
     while(running == true)
     {
@@ -150,6 +146,7 @@ int main(int, char**)
     editor->close();
 
 #ifdef LINUX
+    XDestroyWindow(display, native_win);
     XCloseDisplay(display);
 #endif
     std::cout << "Bye!" << std::endl;

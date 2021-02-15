@@ -1,7 +1,9 @@
 #include <thread>
 #include <iostream>
-#include <csignal>
 #include <atomic>
+#include <vector>
+#include <csignal>
+
 #ifdef LINUX
 #include <X11/Xlib.h>
 #endif
@@ -12,7 +14,6 @@
 #include "aeffeditor.h"
 #include "imgui_editor/imgui_editor.h"
 
-
 std::atomic_bool running = true;
 
 void signal_handler([[maybe_unused]] int sig_number)
@@ -21,22 +22,25 @@ void signal_handler([[maybe_unused]] int sig_number)
 }
 
 #ifdef LINUX
+using NativeWindow = Window;
 Window create_native_window(ERect* rect, Display* display)
 {
     int blackColor = BlackPixel(display, DefaultScreen(display));
     Window x11w = XCreateSimpleWindow(display, DefaultRootWindow(display), rect->left, rect->top,
-        rect->right, rect->bottom, 0, blackColor, blackColor);
-    std::cout << "Window id: " << x11w << ", display: " << display << ", root: " << DefaultRootWindow(display) << std::endl;
+                                     rect->right, rect->bottom, 0, blackColor, blackColor);
 
-    auto res = XMapWindow(display, x11w);
+    XMapWindow(display, x11w);
     XSync(display, False);
     return x11w;
 }
 #endif
 #ifdef WINDOWS
+using NativeWindow = HWND;
+using Display = int;
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-HWND create_native_window(ERect* rect)
+HWND create_native_window(ERect* rect, [[maybe_unused]]int display)
 {
     const char CLASS_NAME[] = "ImGui plugin UI Demo";
 
@@ -48,7 +52,7 @@ HWND create_native_window(ERect* rect)
 
     RegisterClass(&wc);
 
-    /* Stolen from Microsoft example */
+    /* Copied from Microsoft example */
     HWND hwnd = CreateWindowEx(
         0,                              // Optional window styles.
         CLASS_NAME,                     // Window class
@@ -59,13 +63,13 @@ HWND create_native_window(ERect* rect)
         rect->left, rect->top,
         rect->right, rect->bottom,
 
-        NULL,       // Parent window    
-        NULL,       // Menu
+        nullptr,
+        nullptr,
         GetModuleHandle(nullptr),  // Instance handle
-        NULL        // Additional application data
+        nullptr                    // Additional application data
         );
 
-    if (hwnd == NULL)
+    if (!hwnd)
     {
         return 0;
     }
@@ -98,32 +102,51 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 }
 #endif
 
-int main(int, char**)
+int main(int argc, char** argv)
 {
+    int n_windows = 1;
+    if (argc > 1)
+    {
+        n_windows = std::atoi(argv[1]);
+    }
+    std::cout << "Using " << n_windows << " windows" << std::endl;
+
     signal(SIGINT, signal_handler);
     signal(SIGABRT, signal_handler);
+    std::vector<std::unique_ptr<AEffEditor>> editors(n_windows);
 
     /* Create a dummy plugin instance and pass to the Editor's factory function */
     AudioEffect plugin_dummy_instance;
-    auto editor = imgui_editor::create_editor(&plugin_dummy_instance);
+    for (auto& editor : editors)
+    {
+        editor = imgui_editor::create_editor(&plugin_dummy_instance);
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
 
     /* Get the size of the Editor and create a system window to match this,
      * Essentially mimicking what a plugin host would do */
     ERect* rect = nullptr;
-    editor->getRect(&rect);
+    editors[0]->getRect(&rect);
+
+    Display* display = nullptr;
 
 #ifdef LINUX
-    auto display = XOpenDisplay(nullptr);
-    auto native_win = create_native_window(rect, display);
+    display = XOpenDisplay(nullptr);
+#endif
+
+    std::vector<NativeWindow> native_windows(n_windows);
+    for (auto& window : native_windows)
+    {
+        window = create_native_window(rect, display);
+    }
     XEvent x_event;
-#endif
-#ifdef WINDOWS
-    auto native_win = create_native_window(rect);
-#endif
 
-    editor->open(reinterpret_cast<void*>(native_win));
+    for (int i = 0; i < n_windows; ++i)
+    {
+        editors[i]->open(reinterpret_cast<void*>(native_windows[i]));
+    }
 
-    while(running == true)
+    while(running)
     {
 #ifdef LINUX
         XNextEvent(display, &x_event);
@@ -140,13 +163,22 @@ int main(int, char**)
             DispatchMessage(&msg);
         }
 #endif
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        editor->idle();
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        for(auto& editor : editors)
+        {
+            editor->idle();
+        }
     }
-    editor->close();
+    for(auto& editor : editors)
+    {
+        editor->close();
+    }
 
 #ifdef LINUX
-    XDestroyWindow(display, native_win);
+    for(auto& window : native_windows)
+    {
+        XDestroyWindow(display, window);
+    }
     XCloseDisplay(display);
 #endif
     std::cout << "Bye!" << std::endl;

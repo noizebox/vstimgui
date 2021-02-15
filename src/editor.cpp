@@ -154,13 +154,16 @@ bool Editor::_setup_open_gl(void* host_window)
 
 bool Editor::_setup_imgui()
 {
-    // Setup Dear ImGui context
+    /* Setup Dear ImGui context. To enable multiple, independent windows,
+     * the context is thread local and each window has it's own context
+     * and it's own rendering thread */
+
     IMGUI_CHECKVERSION();
     MyImGuiTLS = ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     (void) io;
 
-    // Setup Dear ImGui style
+    /* Setup Dear ImGui style */
     ImGui::StyleColorsDark();
 
     auto& style = ImGui::GetStyle();
@@ -170,7 +173,7 @@ bool Editor::_setup_imgui()
     style.Colors[ImGuiCol_FrameBgActive] = style.Colors[ImGuiCol_FrameBg];
     style.Colors[ImGuiCol_SliderGrabActive] = style.Colors[ImGuiCol_SliderGrab];
 
-    // Setup Platform/Renderer bindings
+    /* Setup Platform/Renderer backends */
     ImGui_ImplGlfw_InitForOpenGL(_window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
@@ -329,9 +332,9 @@ void Editor::_draw_loop(void* window)
         swap_time = (1.0f - SMOOTH_FACT) * swap_time + SMOOTH_FACT * (end_time - split3_time).count() / 1'000'000.0f;
     }
     /* Cleanup on exit */
+    ImGui::DestroyContext();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
     glfwDestroyWindow(_window);
 
     auto inst_no = instance_counter.fetch_add(-1);

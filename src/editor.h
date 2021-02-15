@@ -4,10 +4,14 @@
 #include <atomic>
 #include <thread>
 #include <cstdio>
+#include <mutex>
 
 #define NOMINMAX
 #include "aeffeditor.h"
 #include "imgui_editor/imgui_editor.h"
+
+struct ImGuiContext;
+extern thread_local ImGuiContext* MyImGuiTLS;
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -15,6 +19,7 @@
 
 namespace imgui_editor {
 
+//  OpenGl include macros From DearImgui example - not exactly sure why but it works.
 //  About Desktop OpenGL function loaders:
 //  Modern desktop OpenGL doesn't have a standard portable header file to load OpenGL function pointers.
 //  Helper libraries are often used for this purpose! Here we are supporting a few common ones (gl3w, glew, glad).
@@ -42,13 +47,6 @@ using namespace gl;
 
 // Include glfw3.h after our OpenGL definitions
 #include <GLFW/glfw3.h>
-
-#ifdef LINUX
-#define GLFW_EXPOSE_NATIVE_X11
-#endif
-#ifdef WINDOWS
-#define GLFW_EXPOSE_NATIVE_WIN32
-#endif
 #include <GLFW/glfw3native.h>
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1900) && !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
@@ -80,18 +78,17 @@ private:
 
     void _draw_loop(void* window);
 
+    static std::atomic<int> instance_counter;
+
     int              _num_parameters;
     std::atomic_bool _running{false};
     std::thread      _update_thread;
     ERect            _rect;
 
-#ifdef LINUX
-    Window _host_window;
-#elif WINDOWS
-    HWND _host_window;
-#endif
+    static std::mutex _init_lock;
 
     GLFWwindow* _window;
+
     float _slider_values[10];
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
     ImVec2 slider_s{20, 105};

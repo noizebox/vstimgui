@@ -3,6 +3,7 @@
 #include <array>
 #include <string>
 #include <algorithm>
+#include <iostream>
 
 #include "editor.h"
 #include "font.h"
@@ -10,6 +11,8 @@
 #ifdef LINUX
 #include <X11/Xlib.h>
 #endif
+
+thread_local ImGuiContext* MyImGuiTLS;
 
 namespace imgui_editor {
 
@@ -21,14 +24,39 @@ constexpr int PING_INTERVALL = 300;
 constexpr float SMOOTH_FACT = 0.05;
 const char* glsl_version = "#version 130";
 
+std::mutex Editor::_init_lock;
+std::atomic<int> Editor::instance_counter = 0;
+
 #ifdef WINDOWS
+void reparent_window(GLFWwindow* window, void* host_window)
+{
+    HWND hWnd = glfwGetWin32Window(window);
+    if (SetParent(hWnd, reinterpret_cast<HWND>(host_window)) == false)
+    {
+        std::cout << GetLastError() << std::endl;
+    }
+}
+
 void reparent_window_to_root(GLFWwindow* window)
 {
     HWND hWnd = glfwGetWin32Window(window);
     SetParent(hWnd, nullptr);
 }
 #endif
+
 #ifdef LINUX
+void reparent_window(GLFWwindow* window, void* host_window)
+{
+    Window host_x11_win = reinterpret_cast<Window>(host_window);
+    auto display = glfwGetX11Display();
+    auto glfw_x11_win = glfwGetX11Window(window);
+
+    XReparentWindow(display, glfw_x11_win, host_x11_win, 0,0);// h_offset);
+    glfwFocusWindow(window);
+    XRaiseWindow(display, glfw_x11_win);
+    XSync(display, true);
+}
+
 void reparent_window_to_root([[maybe_unused]]GLFWwindow* window) {}
 #endif
 
@@ -52,6 +80,8 @@ bool Editor::open(void* window)
 
 void Editor::close()
 {
+    std::cout << "Closing window" << std::endl;
+
     if (_running)
     {
         reparent_window_to_root(_window);
@@ -65,23 +95,27 @@ void Editor::close()
 
 bool Editor::_setup_open_gl(void* host_window)
 {
-    glfwSetErrorCallback(glfw_error_callback);
-    if (!glfwInit())
+    /* Belt and braces! This refcount is mostly for the imgui-glfw backend.
+     * The refcounted initialization in the included glfw fork is useful
+     * when there are multiple plugins (not just multiple instances) using
+     * vstimgui */
+    auto inst_no = instance_counter.fetch_add(1);
+    if (inst_no == 0)
     {
-        return false;
+        glfwSetErrorCallback(glfw_error_callback);
+        if (!glfwInit())
+        {
+            return false;
+        }
+        /* Until this feature is done in glfw https://github.com/glfw/glfw/issues/25
+         * Open a glfw window and set it's native window a child of the host provided window */
     }
-    /* Until this feature is done in glfw https://github.com/glfw/glfw/issues/25
-     * Open a glfw window and set it's native window a child of the host provided window */
 
     // GL 3.0 + GLSL 130
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
-#ifdef WINDOWS
-    /* On Linux we can't, for some reason, not reparent an undecorated window */
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-#endif
 
     _window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Dear ImGui Plugin UI", nullptr, nullptr);
     if (_window == nullptr)
@@ -90,50 +124,7 @@ bool Editor::_setup_open_gl(void* host_window)
         return false;
     }
 
-#ifdef LINUX
-    Window root;
-    Window parent;
-    Window *child_list;
-    unsigned int nch;
-    XID host_win = reinterpret_cast<Window>(host_window);
-    _host_window = host_win;
-    auto display = glfwGetX11Display();
-    auto x11_win = glfwGetX11Window(_window);
-
-    /* The X11 window handle that we get from glfwGetX11Window() is in fact
-     * wrapped in a container window and we can't reparent that directly.
-     * We must get the parent of the given X11 window and reparent that to
-     * the window provide by the host.
-     * We also need to get the size of the parent window so we can get the
-     * size of the title bar to move the window up in order to hide it
-     * */
-    XQueryTree(display,x11_win , &root, &parent, &child_list, &nch);
-    XWindowAttributes attributes;
-    int h_offset = 0;
-    if (XGetWindowAttributes(display, parent, &attributes))
-    {
-        h_offset = _rect.bottom - attributes.height;
-    }
-    XReparentWindow(display, parent, _host_window, 0, h_offset);
-#endif
-
-#ifdef WINDOWS
-    HWND hWnd = glfwGetWin32Window(_window);
-    //SetWindowLongPtr(hWnd, GWL_STYLE, WS_POPUP | WS_CHILD);
-    //auto parent = GetParent(hWnd);
-    //SetWindowLongPtr(hWnd, GWL_STYLE, (GetWindowLongPtr(hWnd, GWL_STYLE) & ~WS_POPUP) | WS_CHILD);
-    //SetWindowLongPtr(hWnd, GWL_STYLE, (GetWindowLongPtr(hWnd, GWL_STYLE) & ~WS_POPUP) | WS_CHILD);
-    if (SetParent(hWnd, reinterpret_cast<HWND>(host_window)))
-    {
-        _host_window = static_cast<HWND>(host_window);
-    }
-    else
-    {
-        std::cout << GetLastError() << std::endl;
-    }
-    //SetWindowPos(hWnd, HWND_TOP , 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, SWP_SHOWWINDOW);
-#endif
-
+    reparent_window(_window, host_window);
     glfwMakeContextCurrent(_window);
     glfwSwapInterval(1);
 
@@ -163,15 +154,17 @@ bool Editor::_setup_open_gl(void* host_window)
 
 bool Editor::_setup_imgui()
 {
-    // Setup Dear ImGui context
+    /* Setup Dear ImGui context. To enable multiple, independent windows,
+     * the context is thread local and each window has it's own context
+     * and it's own rendering thread */
+
     IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
+    MyImGuiTLS = ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     (void) io;
 
-    // Setup Dear ImGui style
+    /* Setup Dear ImGui style */
     ImGui::StyleColorsDark();
-    //ImGui::StyleColorsClassic();
 
     auto& style = ImGui::GetStyle();
     style.GrabRounding = 0.0f;
@@ -180,7 +173,7 @@ bool Editor::_setup_imgui()
     style.Colors[ImGuiCol_FrameBgActive] = style.Colors[ImGuiCol_FrameBg];
     style.Colors[ImGuiCol_SliderGrabActive] = style.Colors[ImGuiCol_SliderGrab];
 
-    // Setup Platform/Renderer bindings
+    /* Setup Platform/Renderer backends */
     ImGui_ImplGlfw_InitForOpenGL(_window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
@@ -189,7 +182,7 @@ bool Editor::_setup_imgui()
      * CMake when generating the make files. Default font is Roboto
      * To change font, set the CMake varible INCLUDED_FONT */
     ImFontConfig config;
-    io.Fonts->AddFontFromMemoryCompressedTTF(font_compressed_data, font_compressed_size, 15, &config);
+    io.Fonts->AddFontFromMemoryCompressedTTF(font_compressed_data, font_compressed_size, 16 , &config);
     return true;
 }
 
@@ -202,7 +195,7 @@ bool Editor::getRect(ERect** rect)
 void Editor::idle()
 {
     int param_count = std::min(_num_parameters, MAX_PARAMETERS);
-    /* Quick way of updating paramter values. In a real plugin impl, you probably
+    /* Quick way of updating parameter values. In a real plugin impl, you probably
      * only want to read parameter value that are "dirty" in the sense that they
      * have recently been changed from outside the editor */
     for (int i = 0; i < param_count; ++i)
@@ -213,8 +206,13 @@ void Editor::idle()
 
 void Editor::_draw_loop(void* window)
 {
-    _setup_open_gl(window);
-    _setup_imgui();
+    /* Setting up more than 1 context at the same time seems to be not 100% thread safe */
+    {
+        std::scoped_lock<std::mutex> lock(_init_lock);
+        _setup_open_gl(window);
+        _setup_imgui();
+    }
+
     int count = 0;
     /* Only display a maximum of 10 parameters in this demo */
     int param_count = std::min(_num_parameters, MAX_PARAMETERS);
@@ -246,13 +244,10 @@ void Editor::_draw_loop(void* window)
     while (!glfwWindowShouldClose(_window) && _running)
     {
         // Poll and handle events (inputs, window resize, etc.)
-        // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
-        // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application.
-        // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application.
-        // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
         glfwPollEvents();
 
         auto start_time = std::chrono::high_resolution_clock::now();
+
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -263,7 +258,7 @@ void Editor::_draw_loop(void* window)
         ImGui::SetNextWindowBgAlpha(0.0f);
         ImGui::Begin("__", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoMove);
-        //ImGui::BeginGroup();
+
         ImU32 colour = ImColor(0x41, 0x7c, 0x8c, 0xff);
 
         ImDrawList*draw_list = ImGui::GetWindowDrawList();
@@ -308,10 +303,10 @@ void Editor::_draw_loop(void* window)
         ImGui::Text("Open GL render time: %.4f ms", gl_render_time);
         ImGui::Text("Swap time: %.4f ms", swap_time);
         ImGui::End();
-        //}
+
         auto split_time = std::chrono::high_resolution_clock::now();
 
-        // Rendering
+        /* Rendering */
         ImGui::Render();
         int display_w, display_h;
         auto split2_time = std::chrono::high_resolution_clock::now();
@@ -337,11 +332,16 @@ void Editor::_draw_loop(void* window)
         swap_time = (1.0f - SMOOTH_FACT) * swap_time + SMOOTH_FACT * (end_time - split3_time).count() / 1'000'000.0f;
     }
     /* Cleanup on exit */
+    ImGui::DestroyContext();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
     glfwDestroyWindow(_window);
-    glfwTerminate();
+
+    auto inst_no = instance_counter.fetch_add(-1);
+    if (inst_no <= 1)
+    {
+        glfwTerminate();
+    }
 }
 
 } // imgui_editor

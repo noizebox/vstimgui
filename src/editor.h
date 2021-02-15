@@ -78,6 +78,8 @@ private:
 
     void _draw_loop(void* window);
 
+    static std::atomic<int> instance_counter;
+
     int              _num_parameters;
     std::atomic_bool _running{false};
     std::thread      _update_thread;

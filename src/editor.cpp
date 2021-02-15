@@ -25,6 +25,8 @@ constexpr float SMOOTH_FACT = 0.05;
 const char* glsl_version = "#version 130";
 
 std::mutex Editor::_init_lock;
+std::atomic<int> Editor::instance_counter = 0;
+
 #ifdef WINDOWS
 void reparent_window(GLFWwindow* window, void* host_window)
 {
@@ -93,14 +95,22 @@ void Editor::close()
 
 bool Editor::_setup_open_gl(void* host_window)
 {
-    glfwSetErrorCallback(glfw_error_callback);
-    if (!glfwInit())
+    /* Belt and braces! This refcount is mostly for the imgui-glfw backend.
+     * The refcounted initialization in the included glfw fork is useful
+     * when there are multiple plugins (not just multiple instances) using
+     * vstimgui */
+    auto inst_no = instance_counter.fetch_add(1);
+    if (inst_no == 0)
     {
-        return false;
+        glfwSetErrorCallback(glfw_error_callback);
+        if (!glfwInit())
+        {
+            return false;
+        }
+        /* Until this feature is done in glfw https://github.com/glfw/glfw/issues/25
+         * Open a glfw window and set it's native window a child of the host provided window */
     }
-    /* Until this feature is done in glfw https://github.com/glfw/glfw/issues/25
-     * Open a glfw window and set it's native window a child of the host provided window */
-    
+
     // GL 3.0 + GLSL 130
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
@@ -169,7 +179,7 @@ bool Editor::_setup_imgui()
      * CMake when generating the make files. Default font is Roboto
      * To change font, set the CMake varible INCLUDED_FONT */
     ImFontConfig config;
-    io.Fonts->AddFontFromMemoryCompressedTTF(font_compressed_data, font_compressed_size, 15, &config);
+    io.Fonts->AddFontFromMemoryCompressedTTF(font_compressed_data, font_compressed_size, 16 , &config);
     return true;
 }
 
@@ -182,7 +192,7 @@ bool Editor::getRect(ERect** rect)
 void Editor::idle()
 {
     int param_count = std::min(_num_parameters, MAX_PARAMETERS);
-    /* Quick way of updating paramter values. In a real plugin impl, you probably
+    /* Quick way of updating parameter values. In a real plugin impl, you probably
      * only want to read parameter value that are "dirty" in the sense that they
      * have recently been changed from outside the editor */
     for (int i = 0; i < param_count; ++i)
@@ -193,8 +203,7 @@ void Editor::idle()
 
 void Editor::_draw_loop(void* window)
 {
-    /* Even though the glfw context is thread local, setting up more than
-     * context at the same time seems to be not 100% thread safe */
+    /* Setting up more than 1 context at the same time seems to be not 100% thread safe */
     {
         std::scoped_lock<std::mutex> lock(_init_lock);
         _setup_open_gl(window);
@@ -232,13 +241,10 @@ void Editor::_draw_loop(void* window)
     while (!glfwWindowShouldClose(_window) && _running)
     {
         // Poll and handle events (inputs, window resize, etc.)
-        // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
-        // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application.
-        // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application.
-        // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
         glfwPollEvents();
 
         auto start_time = std::chrono::high_resolution_clock::now();
+
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -294,10 +300,10 @@ void Editor::_draw_loop(void* window)
         ImGui::Text("Open GL render time: %.4f ms", gl_render_time);
         ImGui::Text("Swap time: %.4f ms", swap_time);
         ImGui::End();
-        //}
+
         auto split_time = std::chrono::high_resolution_clock::now();
 
-        // Rendering
+        /* Rendering */
         ImGui::Render();
         int display_w, display_h;
         auto split2_time = std::chrono::high_resolution_clock::now();
@@ -316,7 +322,6 @@ void Editor::_draw_loop(void* window)
             std::cout << "Ping " << count / PING_INTERVALL << std::endl;
         }
 
-
         /* Filter the timings so they look a bit nicer */
         draw_time = (1.0f - SMOOTH_FACT) * draw_time + SMOOTH_FACT * (split_time - start_time).count() / 1'000'000.0f;
         render_time = (1.0f - SMOOTH_FACT) * render_time + SMOOTH_FACT * (split2_time - split_time).count() / 1'000'000.0f;
@@ -328,7 +333,12 @@ void Editor::_draw_loop(void* window)
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
     glfwDestroyWindow(_window);
-    glfwTerminate();
+
+    auto inst_no = instance_counter.fetch_add(-1);
+    if (inst_no <= 1)
+    {
+        glfwTerminate();
+    }
 }
 
 } // imgui_editor

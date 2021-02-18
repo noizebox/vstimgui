@@ -14,8 +14,6 @@
 
 thread_local ImGuiContext* MyImGuiTLS;
 
-namespace imgui_editor {
-
 constexpr int WINDOW_WIDTH = 500;
 constexpr int WINDOW_HEIGHT = 320;
 constexpr int PARAM_SPACING = 50;
@@ -24,14 +22,16 @@ constexpr int PING_INTERVALL = 300;
 constexpr float SMOOTH_FACT = 0.05;
 const char* glsl_version = "#version 130";
 
+namespace imgui_editor {
+
 std::mutex Editor::_init_lock;
 std::atomic<int> Editor::instance_counter = 0;
 
 #ifdef WINDOWS
 void reparent_window(GLFWwindow* window, void* host_window)
 {
-    HWND hWnd = glfwGetWin32Window(window);
-    if (SetParent(hWnd, reinterpret_cast<HWND>(host_window)) == false)
+    HWND hwnd = glfwGetWin32Window(window);
+    if (SetParent(hwnd, reinterpret_cast<HWND>(host_window)) == nullptr)
     {
         std::cout << GetLastError() << std::endl;
     }
@@ -332,8 +332,8 @@ void Editor::_draw_loop(void* window)
         swap_time = (1.0f - SMOOTH_FACT) * swap_time + SMOOTH_FACT * (end_time - split3_time).count() / 1'000'000.0f;
     }
     /* Cleanup on exit */
-    ImGui::DestroyContext();
     ImGui_ImplOpenGL3_Shutdown();
+    ImGui::DestroyContext();
     ImGui_ImplGlfw_Shutdown();
     glfwDestroyWindow(_window);
 

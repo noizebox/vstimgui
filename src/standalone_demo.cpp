@@ -40,7 +40,7 @@ using Display = int;
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-HWND create_native_window(ERect* rect, [[maybe_unused]]int display)
+HWND create_native_window(ERect* rect, [[maybe_unused]]int* display)
 {
     const char CLASS_NAME[] = "ImGui plugin UI Demo";
 
@@ -132,6 +132,7 @@ int main(int argc, char** argv)
 
 #ifdef LINUX
     display = XOpenDisplay(nullptr);
+    XEvent x_event;
 #endif
 
     std::vector<NativeWindow> native_windows(n_windows);
@@ -139,7 +140,6 @@ int main(int argc, char** argv)
     {
         window = create_native_window(rect, display);
     }
-    XEvent x_event;
 
     for (int i = 0; i < n_windows; ++i)
     {

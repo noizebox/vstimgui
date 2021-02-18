@@ -59,7 +59,7 @@ endif()
 
 add_library(implugingui STATIC ${SOURCE_FILES} ${IMGUI_FILES})
 
-target_compile_features(implugingui PUBLIC cxx_std_17)
+target_compile_features(implugingui PUBLIC cxx_std_20)
 target_compile_definitions(implugingui PRIVATE ${EDITOR_COMPILE_DEFINITIONS} ${IMGUI_COMPILE_DEFINITIONS})
 target_compile_options(implugingui PRIVATE ${EDITOR_COMPILE_OPTIONS})
 add_dependencies(implugingui generate_font)

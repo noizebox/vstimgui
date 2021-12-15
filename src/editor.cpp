@@ -93,7 +93,6 @@ bool Editor::_setup_open_gl(void* host_window)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    glfwWindowHint(GLFW_FOCUSED, GLFW_FALSE);
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
     glfwWindowHint(GLFW_EMBEDDED_WINDOW, GLFW_TRUE);
     glfwWindowHintVoid(GLFW_PARENT_WINDOW_ID, host_window);

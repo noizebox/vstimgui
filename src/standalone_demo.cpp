@@ -21,6 +21,14 @@ void signal_handler([[maybe_unused]] int sig_number)
     running = false;
 }
 
+#ifdef WINDOWS
+using NativeWindow = HWND;
+using Display = int;
+#endif
+
+using InstanceNode = std::pair<std::unique_ptr<AEffEditor>, NativeWindow>;
+void close_editor(std::vector<InstanceNode>* nodes, NativeWindow window);
+
 #ifdef LINUX
 using NativeWindow = Window;
 Window create_native_window(ERect* rect, Display* display)
@@ -44,8 +52,6 @@ Window create_native_window(ERect* rect, Display* display)
 }
 #endif
 #ifdef WINDOWS
-using NativeWindow = HWND;
-using Display = int;
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -83,6 +89,8 @@ HWND create_native_window(ERect* rect, [[maybe_unused]]int* display)
         return 0;
     }
 
+    SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)display);
+
     ShowWindow(hwnd, 5);
     return hwnd;
 }
@@ -92,9 +100,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     switch (uMsg)
     {
         case WM_DESTROY:
-            PostQuitMessage(0);
-            running = false;
-            return 0;
+        {
+            auto nodes = reinterpret_cast<std::vector<InstanceNode>*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+            close_editor(nodes, hwnd);
+            break;
+        }
 
         case WM_PAINT:
         {
@@ -111,6 +121,24 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 }
 #endif
 
+void close_editor(std::vector<InstanceNode>* nodes, NativeWindow window)
+{
+    for (auto editor = nodes->begin(); editor != nodes->end(); editor++)
+    {
+        if (editor->second == window)
+        {
+            editor->first->close();
+#ifdef LINUX
+            XDestroyWindow(display, window);
+#elif WINDOWS
+            DestroyWindow(window);
+#endif
+            nodes->erase(editor);
+            break;
+        }
+    }
+}
+
 int main(int argc, char** argv)
 {
     int n_windows = 1;
@@ -122,7 +150,7 @@ int main(int argc, char** argv)
 
     signal(SIGINT, signal_handler);
     signal(SIGABRT, signal_handler);
-    std::vector<std::pair<std::unique_ptr<AEffEditor>, NativeWindow>> editors(n_windows);
+    std::vector<InstanceNode> editors(n_windows);
 
     /* Create a dummy plugin instance and pass to the Editor's factory function */
     AudioEffect plugin_dummy_instance;
@@ -141,7 +169,7 @@ int main(int argc, char** argv)
         /* Get the size of the Editor and create a system window to match this,
          * Essentially mimicking what a plugin host would do */
         editor.first->getRect(&rect);
-        editor.second = create_native_window(rect, display);
+        editor.second = create_native_window(rect, reinterpret_cast<int*>(&editors));
         editor.first->open(reinterpret_cast<void*>(editor.second));
     }
 
@@ -160,16 +188,7 @@ int main(int argc, char** argv)
             {
                 Window window = x_event.xclient.window;
                 /* Find the window whose close button was clicked and close it */
-                for (auto editor = editors.begin(); editor != editors.end(); editor++)
-                {
-                    if (editor->second == window)
-                    {
-                        editor->first->close();
-                        XDestroyWindow(display, window);
-                        editors.erase(editor);
-                        break;
-                    }
-                }
+                close_editor(editors, window);
                 if (editors.empty())
                 {
                     running = false;
@@ -179,11 +198,16 @@ int main(int argc, char** argv)
 
 #endif
 #ifdef WINDOWS
-        MSG msg = { };
-        if (GetMessage(&msg, NULL, 0, 0))
+        MSG msg;
+       
+        while (GetMessage(&msg, NULL, 0, 0))
         {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
+        }
+        if (editors.empty())
+        {
+            running = false;
         }
 #endif
         std::this_thread::sleep_for(std::chrono::milliseconds(50));

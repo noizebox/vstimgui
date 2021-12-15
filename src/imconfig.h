@@ -16,3 +16,6 @@
 /* Add more configurations from Dear ImGui here if needed */
 struct ImGuiContext;
 extern thread_local ImGuiContext* MyImGuiTLS;
+
+/* Starting fresh, don't want to keep any legacy crap around */
+#define IMGUI_DISABLE_OBSOLETE_FUNCTIONS

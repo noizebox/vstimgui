@@ -27,39 +27,6 @@ namespace imgui_editor {
 std::mutex Editor::_init_lock;
 std::atomic<int> Editor::instance_counter = 0;
 
-#ifdef WINDOWS
-void reparent_window(GLFWwindow* window, void* host_window)
-{
-    HWND hwnd = glfwGetWin32Window(window);
-    if (SetParent(hwnd, reinterpret_cast<HWND>(host_window)) == nullptr)
-    {
-        std::cout << GetLastError() << std::endl;
-    }
-}
-
-void reparent_window_to_root(GLFWwindow* window)
-{
-    HWND hWnd = glfwGetWin32Window(window);
-    SetParent(hWnd, nullptr);
-}
-#endif
-
-#ifdef LINUX
-void reparent_window(GLFWwindow* window, void* host_window)
-{
-    Window host_x11_win = reinterpret_cast<Window>(host_window);
-    auto display = glfwGetX11Display();
-    auto glfw_x11_win = glfwGetX11Window(window);
-
-    XReparentWindow(display, glfw_x11_win, host_x11_win, 0,0);// h_offset);
-    glfwFocusWindow(window);
-    XRaiseWindow(display, glfw_x11_win);
-    XSync(display, true);
-}
-
-void reparent_window_to_root([[maybe_unused]]GLFWwindow* window) {}
-#endif
-
 std::unique_ptr<AEffEditor> create_editor(AudioEffect* instance)
 {
     return std::make_unique<Editor>(instance);
@@ -73,8 +40,28 @@ Editor::Editor(AudioEffect* instance) : AEffEditor::AEffEditor(instance),
 
 bool Editor::open(void* window)
 {
+    /* Handle situations when open_view is called on an already
+     * open editor or one that wasn't closed properly */
+    if (_running == true)
+    {
+        return false;
+    }
+    if (_update_thread.joinable())
+    {
+        _update_thread.join();
+    }
+
     _running = true;
-    _update_thread = std::thread(&Editor::_draw_loop, this, window);
+    try
+    {
+        _update_thread = std::thread(&Editor::_draw_loop, this, window);
+    }
+    catch (std::exception& e)
+    {
+        std::cerr << "Failed to start draw thread: " << e.what() << std::endl;
+        return false;
+    }
+
     return true;
 }
 
@@ -82,23 +69,16 @@ void Editor::close()
 {
     std::cout << "Closing window" << std::endl;
 
-    if (_running)
+    _running = false;
+
+    if (_update_thread.joinable())
     {
-        reparent_window_to_root(_window);
-        _running = false;
-        if (_update_thread.joinable())
-        {
-            _update_thread.join();
-        }
+        _update_thread.join();
     }
 }
 
 bool Editor::_setup_open_gl(void* host_window)
 {
-    /* Belt and braces! This refcount is mostly for the imgui-glfw backend.
-     * The refcounted initialization in the included glfw fork is useful
-     * when there are multiple plugins (not just multiple instances) using
-     * vstimgui */
     auto inst_no = instance_counter.fetch_add(1);
     if (inst_no == 0)
     {
@@ -107,15 +87,16 @@ bool Editor::_setup_open_gl(void* host_window)
         {
             return false;
         }
-        /* Until this feature is done in glfw https://github.com/glfw/glfw/issues/25
-         * Open a glfw window and set it's native window a child of the host provided window */
     }
 
     // GL 3.0 + GLSL 130
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_FOCUSED, GLFW_FALSE);
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+    glfwWindowHint(GLFW_EMBEDDED_WINDOW, GLFW_TRUE);
+    glfwWindowHintVoid(GLFW_PARENT_WINDOW_ID, host_window);
 
     _window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Dear ImGui Plugin UI", nullptr, nullptr);
     if (_window == nullptr)
@@ -124,7 +105,6 @@ bool Editor::_setup_open_gl(void* host_window)
         return false;
     }
 
-    reparent_window(_window, host_window);
     glfwMakeContextCurrent(_window);
     glfwSwapInterval(1);
 
@@ -149,6 +129,7 @@ bool Editor::_setup_open_gl(void* host_window)
         std::cout << "Failed to initialize OpenGL loader!" << std::endl;
         return false;
     }
+
     return true;
 }
 
@@ -213,7 +194,6 @@ void Editor::_draw_loop(void* window)
         _setup_imgui();
     }
 
-    int count = 0;
     /* Only display a maximum of 10 parameters in this demo */
     int param_count = std::min(_num_parameters, MAX_PARAMETERS);
 
@@ -262,7 +242,7 @@ void Editor::_draw_loop(void* window)
         ImU32 colour = ImColor(0x41, 0x7c, 0x8c, 0xff);
 
         ImDrawList*draw_list = ImGui::GetWindowDrawList();
-        draw_list->AddRectFilled(ImVec2(5, 5), ImVec2(param_count * PARAM_SPACING + 10, 180), colour, 3.0f, ImDrawCornerFlags_All);
+        draw_list->AddRectFilled(ImVec2(5, 5), ImVec2(param_count * PARAM_SPACING + 10, 180), colour, 3.0f, ImDrawFlags_RoundCornersAll);
 
         ImGui::Text("Parameters");
         ImGui::NewLine();
@@ -320,10 +300,6 @@ void Editor::_draw_loop(void* window)
         auto split3_time = std::chrono::high_resolution_clock::now();
         glfwSwapBuffers(_window);
         auto end_time = std::chrono::high_resolution_clock::now();
-        if (count++ % PING_INTERVALL == 0)
-        {
-            std::cout << "Ping " << count / PING_INTERVALL << std::endl;
-        }
 
         /* Filter the timings so they look a bit nicer */
         draw_time = (1.0f - SMOOTH_FACT) * draw_time + SMOOTH_FACT * (split_time - start_time).count() / 1'000'000.0f;
@@ -332,12 +308,16 @@ void Editor::_draw_loop(void* window)
         swap_time = (1.0f - SMOOTH_FACT) * swap_time + SMOOTH_FACT * (end_time - split3_time).count() / 1'000'000.0f;
     }
     /* Cleanup on exit */
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui::DestroyContext();
-    ImGui_ImplGlfw_Shutdown();
-    glfwDestroyWindow(_window);
 
     auto inst_no = instance_counter.fetch_add(-1);
+    std::scoped_lock<std::mutex> lock(_init_lock);
+
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown(inst_no <= 1);
+    ImGui::DestroyContext();
+    glfwDestroyWindow(_window);
+
     if (inst_no <= 1)
     {
         glfwTerminate();

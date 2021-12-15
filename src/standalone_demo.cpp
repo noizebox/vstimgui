@@ -25,12 +25,21 @@ void signal_handler([[maybe_unused]] int sig_number)
 using NativeWindow = Window;
 Window create_native_window(ERect* rect, Display* display)
 {
-    int blackColor = BlackPixel(display, DefaultScreen(display));
-    Window x11w = XCreateSimpleWindow(display, DefaultRootWindow(display), rect->left, rect->top,
-                                     rect->right, rect->bottom, 0, blackColor, blackColor);
+
+    XSetWindowAttributes attributes = {0};
+    attributes.event_mask = StructureNotifyMask;
+
+    Window x11w = XCreateWindow(display, DefaultRootWindow(display), rect->left, rect->top,
+                                rect->right, rect->bottom, 0, CopyFromParent, InputOutput,
+                                CopyFromParent, 0, &attributes);
+
+    Atom delete_atom = XInternAtom(display, "WM_DELETE_WINDOW", False);
+    XSetWMProtocols(display, x11w, &delete_atom, 1);
+    XSelectInput(display, x11w, StructureNotifyMask);
 
     XMapWindow(display, x11w);
     XSync(display, False);
+    std::cout << "Created window " << (void*)x11w << std::endl;
     return x11w;
 }
 #endif
@@ -113,47 +122,61 @@ int main(int argc, char** argv)
 
     signal(SIGINT, signal_handler);
     signal(SIGABRT, signal_handler);
-    std::vector<std::unique_ptr<AEffEditor>> editors(n_windows);
+    std::vector<std::pair<std::unique_ptr<AEffEditor>, NativeWindow>> editors(n_windows);
 
     /* Create a dummy plugin instance and pass to the Editor's factory function */
     AudioEffect plugin_dummy_instance;
-    for (auto& editor : editors)
-    {
-        editor = imgui_editor::create_editor(&plugin_dummy_instance);
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
-
-    /* Get the size of the Editor and create a system window to match this,
-     * Essentially mimicking what a plugin host would do */
-    ERect* rect = nullptr;
-    editors[0]->getRect(&rect);
 
     Display* display = nullptr;
-
 #ifdef LINUX
     display = XOpenDisplay(nullptr);
     XEvent x_event;
 #endif
 
-    std::vector<NativeWindow> native_windows(n_windows);
-    for (auto& window : native_windows)
+    for (auto& editor : editors)
     {
-        window = create_native_window(rect, display);
+        editor.first = imgui_editor::create_editor(&plugin_dummy_instance);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        ERect* rect = nullptr;
+        /* Get the size of the Editor and create a system window to match this,
+         * Essentially mimicking what a plugin host would do */
+        editor.first->getRect(&rect);
+        editor.second = create_native_window(rect, display);
+        editor.first->open(reinterpret_cast<void*>(editor.second));
     }
 
-    for (int i = 0; i < n_windows; ++i)
-    {
-        editors[i]->open(reinterpret_cast<void*>(native_windows[i]));
-    }
 
     while(running)
     {
 #ifdef LINUX
-        XNextEvent(display, &x_event);
-        if (x_event.type == DestroyNotify)
+        /* Linux event handling */
+        XEvent x_event;
+        Atom close_msg = XInternAtom(display, "WM_DELETE_WINDOW", False);
+
+        while (XPending(display))
         {
-            running = false;
+            XNextEvent(display, &x_event);
+            if (x_event.type == ClientMessage && x_event.xclient.data.l[0] == close_msg)
+            {
+                Window window = x_event.xclient.window;
+                /* Find the window whose close button was clicked and close it */
+                for (auto editor = editors.begin(); editor != editors.end(); editor++)
+                {
+                    if (editor->second == window)
+                    {
+                        editor->first->close();
+                        XDestroyWindow(display, window);
+                        editors.erase(editor);
+                        break;
+                    }
+                }
+                if (editors.empty())
+                {
+                    running = false;
+                }
+            }
         }
+
 #endif
 #ifdef WINDOWS
         MSG msg = { };
@@ -163,24 +186,26 @@ int main(int argc, char** argv)
             DispatchMessage(&msg);
         }
 #endif
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         for(auto& editor : editors)
         {
-            editor->idle();
+            editor.first->idle();
         }
     }
+
+    /* If there are any windows still open, close them */
     for(auto& editor : editors)
     {
-        editor->close();
+        editor.first->close();
+#ifdef LINUX
+        XDestroyWindow(display, editor.second);
+#endif
     }
 
 #ifdef LINUX
-    for(auto& window : native_windows)
-    {
-        XDestroyWindow(display, window);
-    }
     XCloseDisplay(display);
 #endif
+
     std::cout << "Bye!" << std::endl;
     return 0;
 }

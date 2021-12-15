@@ -244,7 +244,7 @@ void Editor::_draw_loop(void* window)
         ImU32 colour = ImColor(0x41, 0x7c, 0x8c, 0xff);
 
         ImDrawList*draw_list = ImGui::GetWindowDrawList();
-        draw_list->AddRectFilled(ImVec2(5, 5), ImVec2(param_count * PARAM_SPACING + 10, 180), colour, 3.0f, ImDrawCornerFlags_All);
+        draw_list->AddRectFilled(ImVec2(5, 5), ImVec2(param_count * PARAM_SPACING + 10, 180), colour, 3.0f, ImDrawFlags_RoundCornersAll);
 
         ImGui::Text("Parameters");
         ImGui::NewLine();

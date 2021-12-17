@@ -95,7 +95,7 @@ HWND create_native_window(ERect* rect, [[maybe_unused]]int* display,  std::vecto
     }
 
     /* So we can access the list of editor windows in WndProc, kinda hackish but works for a simple example */
-    SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_case<LONG_PTR>(editors));
+    SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(editors));
 
     ShowWindow(hwnd, 5);
     return hwnd;
@@ -108,7 +108,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         case WM_DESTROY:
         {
             auto editors = reinterpret_cast<std::vector<EditorNode>*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
-            close_editor_window(editors, hwnd);
+            close_editor_window(editors, hwnd, 0);
             break;
         }
 

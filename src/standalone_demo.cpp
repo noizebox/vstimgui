@@ -25,13 +25,18 @@ void signal_handler([[maybe_unused]] int sig_number)
 using NativeWindow = HWND;
 using Display = int;
 #endif
-
-using InstanceNode = std::pair<std::unique_ptr<AEffEditor>, NativeWindow>;
-void close_editor(std::vector<InstanceNode>* nodes, NativeWindow window);
-
 #ifdef LINUX
 using NativeWindow = Window;
-Window create_native_window(ERect* rect, Display* display)
+#endif
+
+using EditorNode = std::pair<std::unique_ptr<AEffEditor>, NativeWindow>;
+
+void close_editor_window(std::vector<EditorNode>* editors, NativeWindow window, Display* display);
+
+NativeWindow create_native_window(ERect* rect, Display* display, std::vector<EditorNode>* editors);
+
+#ifdef LINUX
+Window create_native_window(ERect* rect, Display* display, [[maybe_unused]] std::vector<EditorNode>* editors)
 {
 
     XSetWindowAttributes attributes = {0};
@@ -55,7 +60,7 @@ Window create_native_window(ERect* rect, Display* display)
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-HWND create_native_window(ERect* rect, [[maybe_unused]]int* display)
+HWND create_native_window(ERect* rect, [[maybe_unused]]int* display,  std::vector<EditorNode>* editors)
 {
     const char CLASS_NAME[] = "ImGui plugin UI Demo";
 
@@ -89,7 +94,8 @@ HWND create_native_window(ERect* rect, [[maybe_unused]]int* display)
         return 0;
     }
 
-    SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)display);
+    /* So we can access the list of editor windows in WndProc, kinda hackish but works for a simple example */
+    SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_case<LONG_PTR>(editors));
 
     ShowWindow(hwnd, 5);
     return hwnd;
@@ -101,8 +107,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     {
         case WM_DESTROY:
         {
-            auto nodes = reinterpret_cast<std::vector<InstanceNode>*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
-            close_editor(nodes, hwnd);
+            auto editors = reinterpret_cast<std::vector<EditorNode>*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+            close_editor_window(editors, hwnd);
             break;
         }
 
@@ -121,9 +127,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 }
 #endif
 
-void close_editor(std::vector<InstanceNode>* nodes, NativeWindow window)
+void close_editor_window(std::vector<EditorNode>* editors, NativeWindow window, [[maybe_unused]] Display* display)
 {
-    for (auto editor = nodes->begin(); editor != nodes->end(); editor++)
+    for (auto editor = editors->begin(); editor != editors->end(); editor++)
     {
         if (editor->second == window)
         {
@@ -133,7 +139,7 @@ void close_editor(std::vector<InstanceNode>* nodes, NativeWindow window)
 #elif WINDOWS
             DestroyWindow(window);
 #endif
-            nodes->erase(editor);
+            editors->erase(editor);
             break;
         }
     }
@@ -150,7 +156,7 @@ int main(int argc, char** argv)
 
     signal(SIGINT, signal_handler);
     signal(SIGABRT, signal_handler);
-    std::vector<InstanceNode> editors(n_windows);
+    std::vector<EditorNode> editors(n_windows);
 
     /* Create a dummy plugin instance and pass to the Editor's factory function */
     AudioEffect plugin_dummy_instance;
@@ -169,10 +175,9 @@ int main(int argc, char** argv)
         /* Get the size of the Editor and create a system window to match this,
          * Essentially mimicking what a plugin host would do */
         editor.first->getRect(&rect);
-        editor.second = create_native_window(rect, reinterpret_cast<int*>(&editors));
+        editor.second = create_native_window(rect, display, &editors);
         editor.first->open(reinterpret_cast<void*>(editor.second));
     }
-
 
     while(running)
     {
@@ -188,16 +193,13 @@ int main(int argc, char** argv)
             {
                 Window window = x_event.xclient.window;
                 /* Find the window whose close button was clicked and close it */
-                close_editor(editors, window);
-                if (editors.empty())
-                {
-                    running = false;
-                }
+                close_editor_window(&editors, window, display);
             }
         }
 
 #endif
 #ifdef WINDOWS
+        /* Win32 event handling */
         MSG msg;
        
         while (GetMessage(&msg, NULL, 0, 0))
@@ -205,16 +207,17 @@ int main(int argc, char** argv)
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
+#endif
+
         if (editors.empty())
         {
             running = false;
         }
-#endif
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         for(auto& editor : editors)
         {
             editor.first->idle();
         }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
     /* If there are any windows still open, close them */

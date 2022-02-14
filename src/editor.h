@@ -17,7 +17,6 @@ extern thread_local ImGuiContext* MyImGuiTLS;
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-
 //  OpenGl include macros From DearImgui example - not exactly sure why but it works.
 //  About Desktop OpenGL function loaders:
 //  Modern desktop OpenGL doesn't have a standard portable header file to load OpenGL function pointers.
